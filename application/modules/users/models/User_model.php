@@ -1,0 +1,62 @@
+<?php
+defined('BASEPATH') or exit('No direct script access allowed');
+
+class User_model extends CI_Model
+{
+    private $table = 'users';
+
+    public function get_all()
+    {
+        return $this->db
+            ->select('users.*, roles.name AS role_name')
+            ->from($this->table)
+            ->join('roles', 'roles.id = users.role_id', 'left')
+            ->order_by('users.name', 'ASC')
+            ->get()
+            ->result_array();
+    }
+
+    public function find($id)
+    {
+        return $this->db
+            ->where('id', (int) $id)
+            ->get($this->table)
+            ->row_array();
+    }
+
+    public function insert(array $data)
+    {
+        if (!empty($data['password'])) {
+            $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+        }
+
+        $data['created_at'] = date('Y-m-d H:i:s');
+        $data['updated_at'] = date('Y-m-d H:i:s');
+
+        return $this->db->insert($this->table, $data);
+    }
+
+    public function update($id, array $data)
+    {
+        if (isset($data['password'])) {
+            if ($data['password'] === '') {
+                unset($data['password']);
+            } else {
+                $data['password'] = password_hash($data['password'], PASSWORD_DEFAULT);
+            }
+        }
+
+        $data['updated_at'] = date('Y-m-d H:i:s');
+
+        return $this->db
+            ->where('id', (int) $id)
+            ->update($this->table, $data);
+    }
+
+    public function delete($id)
+    {
+        return $this->db
+            ->where('id', (int) $id)
+            ->delete($this->table);
+    }
+}

@@ -1,0 +1,13 @@
+.DS_Store
+/.htaccess
+/logs
+/plugins
+
+application/logs/*
+!application/logs/index.html
+!application/logs/.htaccess
+
+/assets/img/ktp/*
+
+.htaccess
+.env

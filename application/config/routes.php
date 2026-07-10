@@ -1,0 +1,34 @@
+<?php
+defined('BASEPATH') or exit('No direct script access allowed');
+
+$route['default_controller'] = 'home';
+$route['calculator'] = 'calculator/index';
+$route['monitoring'] = 'monitoring/index';
+$route['monitoring/router/(:num)'] = 'monitoring/router/$1';
+$route['monitoring/summary'] = 'monitoring/summary';
+$route['monitoring/sessions'] = 'monitoring/sessions';
+$route['monitoring/sessions/(:num)'] = 'monitoring/sessions/$1';
+$route['monitoring/disconnect'] = 'monitoring/disconnect';
+$route['routers'] = 'routers/index';
+$route['routers/create'] = 'routers/create';
+$route['routers/store'] = 'routers/store';
+$route['routers/edit/(:num)'] = 'routers/edit/$1';
+$route['routers/update/(:num)'] = 'routers/update/$1';
+$route['routers/delete/(:num)'] = 'routers/delete/$1';
+$route['customers'] = 'customers/index';
+$route['customers/create'] = 'customers/create';
+$route['customers/store'] = 'customers/store';
+$route['customers/edit/(:num)'] = 'customers/edit/$1';
+$route['customers/update/(:num)'] = 'customers/update/$1';
+$route['customers/delete/(:num)'] = 'customers/delete/$1';
+$route['packages'] = 'packages/index';
+$route['packages/create'] = 'packages/create';
+$route['packages/store'] = 'packages/store';
+$route['packages/edit/(:num)'] = 'packages/edit/$1';
+$route['packages/update/(:num)'] = 'packages/update/$1';
+$route['packages/delete/(:num)'] = 'packages/delete/$1';
+$route['payments'] = 'payments/index';
+$route['payments/store'] = 'payments/store';
+$route['payments/delete/(:num)'] = 'payments/delete/$1';
+$route['404_override'] = '';
+$route['translate_uri_dashes'] = false;
