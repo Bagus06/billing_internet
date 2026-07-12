@@ -1,8 +1,9 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Payments extends CI_Controller
+class Payments extends MY_Controller
 {
+    protected $permission = 'payments';
     private $methods = ['CASH', 'SEABANK'];
 
     public function __construct()
@@ -14,7 +15,7 @@ class Payments extends CI_Controller
 
     public function index()
     {
-        $perPage = max(5, min(100, (int) $this->input->get('per_page') ?: 10));
+        $perPage = max(5, min(100, (int) $this->input->get('per_page') ?: (int) app_setting('default_per_page', 10)));
         $page = max(1, (int) $this->input->get('page') ?: 1);
         $filters = $this->filters();
         $totalRows = $this->payment_model->count_filtered($filters);
@@ -52,7 +53,10 @@ class Payments extends CI_Controller
             $method = 'CASH';
         }
 
-        $this->payment_model->insert([
+        $isFirstPayment = !$this->payment_model->has_customer_payment((int) $customer['id'], (string) $customer['customer_code']);
+        $paymentType = $isFirstPayment ? 'PSB' : 'BULANAN';
+
+        $saved = $this->payment_model->insert([
             'customer_id' => (int) $customer['id'],
             'customer_code' => $customer['customer_code'],
             'customer_name' => $customer['name'],
@@ -61,12 +65,16 @@ class Payments extends CI_Controller
             'package_name' => $customer['package_name'],
             'price' => (float) $customer['price'],
             'group_name' => $customer['group_name'],
-            'payment_type' => trim($this->input->post('payment_type', true)) ?: 'BULANAN',
+            'payment_type' => $paymentType,
             'payment_date' => $paymentDate,
             'payment_method' => $method,
             'notes' => trim($this->input->post('notes', true)),
             'input_date' => date('Y-m-d'),
         ]);
+
+        $this->session->set_flashdata($saved ? 'success' : 'error', $saved
+            ? 'Pembayaran berhasil disimpan sebagai ' . $paymentType . ($isFirstPayment ? ' karena merupakan pembayaran pertama pelanggan.' : ' karena pelanggan sudah memiliki riwayat pembayaran sebelumnya.')
+            : 'Pembayaran gagal disimpan.');
 
         redirect($this->input->post('redirect_to') ?: 'customers');
     }
@@ -77,7 +85,7 @@ class Payments extends CI_Controller
         redirect('payments');
     }
 
-    private function render($view, array $data)
+    protected function render($view, array $data = [], $moduleJsload = null)
     {
         $data['body_class'] = 'monitoring-page';
 

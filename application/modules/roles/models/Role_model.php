@@ -15,9 +15,11 @@ class Role_model extends CI_Model
             'customers' => 'Data Pelanggan',
             'packages' => 'Paket Internet',
             'payments' => 'Data Pembayaran',
+            'financial_reports' => 'Laporan Keuangan',
             'users' => 'Users',
             'roles' => 'Roles',
             'profile' => 'Profile',
+            'settings' => 'Settings',
         ];
     }
 
@@ -79,6 +81,11 @@ class Role_model extends CI_Model
         return $this->db
             ->where('id', (int) $id)
             ->delete($this->table);
+    }
+
+    public function has_users($id)
+    {
+        return $this->db->where('role_id', (int) $id)->count_all_results('users') > 0;
     }
 
     private function sync_permissions($roleId, array $permissions)

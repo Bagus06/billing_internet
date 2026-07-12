@@ -44,10 +44,78 @@ class Mikrotik_api
         return $this->comm('/ppp/active/print');
     }
 
+    public function getInterfaceStats()
+    {
+        return $this->comm('/interface/print', [
+            '=stats' => '',
+        ]);
+    }
+
+    public function getPppSecrets()
+    {
+        return $this->comm('/ppp/secret/print');
+    }
+
+    public function getPppProfiles()
+    {
+        return $this->comm('/ppp/profile/print');
+    }
+
+    public function getIpPools()
+    {
+        return $this->comm('/ip/pool/print');
+    }
+
+    public function createPppProfile(array $data)
+    {
+        $params = [];
+        foreach ($data as $key => $value) {
+            if ($value !== '' && $value !== null) $params['=' . $key] = $value;
+        }
+        return $this->returnId($this->comm('/ppp/profile/add', $params));
+    }
+
+    public function updatePppProfile($profileId, array $data)
+    {
+        $params = ['=.id' => $profileId];
+        foreach ($data as $key => $value) {
+            $params['=' . $key] = (string) $value;
+        }
+        return $this->isDone($this->comm('/ppp/profile/set', $params));
+    }
+
+    public function deletePppProfile($profileId)
+    {
+        return $this->isDone($this->comm('/ppp/profile/remove', ['=.id' => $profileId]));
+    }
+
     public function disconnectSession($activeId)
     {
         return $this->isDone($this->comm('/ppp/active/remove', [
             '=.id' => $activeId,
+        ]));
+    }
+
+    public function setSecretDisabled($secretId, $disabled)
+    {
+        return $this->isDone($this->comm('/ppp/secret/set', [
+            '=.id' => $secretId,
+            '=disabled' => $disabled ? 'yes' : 'no',
+        ]));
+    }
+
+    public function createPppSecret(array $data)
+    {
+        $params = [];
+        foreach ($data as $key => $value) if ($value !== '' && $value !== null) $params['=' . $key] = (string) $value;
+        return $this->returnId($this->comm('/ppp/secret/add', $params));
+    }
+
+    public function setSecretProfile($secretId, $profileName)
+    {
+        return $this->isDone($this->comm('/ppp/secret/set', [
+            '=.id' => $secretId,
+            '=profile' => $profileName,
         ]));
     }
 
@@ -204,12 +272,23 @@ class Mikrotik_api
     private function isDone(array $response)
     {
         foreach ($response as $row) {
+            if (isset($row['!trap']) || isset($row['!fatal'])) return false;
+        }
+        foreach ($response as $row) {
             if (isset($row['!done'])) {
                 return true;
             }
         }
 
         return false;
+    }
+
+    private function returnId(array $response)
+    {
+        foreach ($response as $row) {
+            if (isset($row['ret']) && $row['ret'] !== '') return $row['ret'];
+        }
+        return null;
     }
 
     private function firstRow(array $response)

@@ -8,21 +8,32 @@ class Package_model extends CI_Model
     public function get_all($activeOnly = false)
     {
         if ($activeOnly) {
-            $this->db->where('is_active', 1);
+            $this->db->where('internet_packages.is_active', 1);
         }
 
         return $this->db
+            ->select('internet_packages.*, mikrotik_routers.name AS router_name')
+            ->from($this->table)
+            ->join('mikrotik_routers', 'mikrotik_routers.id = internet_packages.router_id', 'left')
             ->order_by('package_name', 'ASC')
-            ->get($this->table)
+            ->get()
             ->result_array();
     }
 
     public function find($id)
     {
         return $this->db
-            ->where('id', (int) $id)
-            ->get($this->table)
+            ->select('internet_packages.*, mikrotik_routers.name AS router_name')
+            ->from($this->table)
+            ->join('mikrotik_routers', 'mikrotik_routers.id = internet_packages.router_id', 'left')
+            ->where('internet_packages.id', (int) $id)
+            ->get()
             ->row_array();
+    }
+
+    public function find_by_name($name)
+    {
+        return $this->db->where('package_name', (string) $name)->get($this->table)->row_array();
     }
 
     public function insert(array $data)

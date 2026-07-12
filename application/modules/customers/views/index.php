@@ -27,6 +27,8 @@
             <p>Kelola pelanggan, paket layanan, status aktif, dan status pembayaran.</p>
         </div>
 
+        <?php $this->load->view('../../views/layout/flash'); ?>
+
         <div class="card glass-card shadow-sm mt-3">
             <div class="card-body table-responsive">
                 <?php
@@ -60,6 +62,7 @@
                                 <th><input type="text" name="name" class="form-control" placeholder="Cari nama" value="<?= html_escape($filters['name']) ?>"></th>
                                 <th><input type="text" name="phone" class="form-control" placeholder="Cari telepon" value="<?= html_escape($filters['phone']) ?>"></th>
                                 <th></th>
+                                <th></th><th></th>
                                 <th><input type="text" name="package_name" class="form-control" placeholder="Cari paket" value="<?= html_escape($filters['package_name']) ?>"></th>
                                 <th></th>
                                 <th><input type="text" name="group_name" class="form-control" placeholder="Cari kelompok" value="<?= html_escape($filters['group_name']) ?>"></th>
@@ -81,7 +84,7 @@
                                 <th>ID</th>
                                 <th>Nama</th>
                                 <th>Telepon</th>
-                                <th>KTP</th>
+                                <th>KTP</th><th>Secret Name</th><th>Secret Password</th>
                                 <th>Paket</th>
                                 <th class="text-end">Harga</th>
                                 <th>Kelompok</th>
@@ -93,7 +96,7 @@
                         <tbody>
                             <?php if (empty($customers)): ?>
                                 <tr>
-                                    <td colspan="10" class="text-center text-muted">Belum ada data pelanggan.</td>
+                                    <td colspan="12" class="text-center text-muted">Belum ada data pelanggan.</td>
                                 </tr>
                             <?php endif; ?>
 
@@ -103,6 +106,9 @@
                                 $isPaid = strtoupper($customer['payment_status']) === 'SUDAH BAYAR';
                                 $ktpPhoto = trim($customer['ktp_photo']);
                                 $ktpUrl = preg_match('/^https?:\/\//', $ktpPhoto) ? $ktpPhoto : base_url($ktpPhoto);
+                                $secretNik = preg_replace('/\D+/', '', (string) $customer['nik']);
+                                $secretName = $secretNik !== '' ? $secretNik . app_setting('pppoe_username_suffix', '@BATARA.net') : '-';
+                                $secretPassword = $secretNik !== '' ? 'BTN-' . substr($secretNik, -6) : '-';
                                 ?>
                                 <tr>
                                     <td><?= html_escape($customer['customer_code']) ?></td>
@@ -122,13 +128,15 @@
                                             <span class="text-muted small">Belum ada</span>
                                         <?php endif; ?>
                                     </td>
+                                    <td><div class="d-flex align-items-center gap-1"><code><?= html_escape($secretName) ?></code><?php if($secretNik!==''): ?><button type="button" class="monitoring-action customer-copy-secret" data-copy="<?= html_escape($secretName) ?>" title="Copy secret name"><i class="fa-regular fa-copy"></i></button><?php endif; ?></div></td>
+                                    <td><div class="d-flex align-items-center gap-1"><code><?= html_escape($secretPassword) ?></code><?php if($secretNik!==''): ?><button type="button" class="monitoring-action customer-copy-secret" data-copy="<?= html_escape($secretPassword) ?>" title="Copy password"><i class="fa-regular fa-copy"></i></button><?php endif; ?></div></td>
                                     <td><?= html_escape($customer['package_name']) ?></td>
                                     <td class="text-end">Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?></td>
                                     <td><?= html_escape($customer['group_name']) ?></td>
                                     <td>
-                                        <span class="monitoring-badge <?= $isActive ? 'is-online' : 'is-offline' ?>">
+                                        <button type="button" class="monitoring-badge customer-status-toggle border-0 <?= $isActive ? 'is-online' : 'is-offline' ?>" data-toggle-url="<?= site_url('customers/toggle-status') ?>" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-name="<?= html_escape($customer['name']) ?>" data-active="<?= $isActive ? '1' : '0' ?>" title="Klik untuk mengubah status pelanggan">
                                             <?= html_escape($customer['customer_status']) ?>
-                                        </span>
+                                        </button>
                                     </td>
                                     <td>
                                         <span class="monitoring-badge <?= $isPaid ? 'is-online' : 'is-offline' ?>">
@@ -147,7 +155,7 @@
                                         Bayar
                                     </button>
                                     <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('customers/edit/' . $customer['id']) ?>">Edit</a>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('customers/delete/' . $customer['id']) ?>" onclick="return confirm('Hapus pelanggan ini?')">Delete</a>
+                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('customers/delete/' . $customer['id']) ?>" data-confirm="Hapus pelanggan ini?">Delete</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -212,10 +220,8 @@
                 <div class="row g-3">
                     <div class="col-md-6">
                         <label class="form-label">Pembayaran</label>
-                        <select name="payment_type" class="form-select" required>
-                            <option value="BULANAN">BULANAN</option>
-                            <option value="PSB">PSB</option>
-                        </select>
+                        <input type="text" class="form-control" value="Otomatis oleh sistem" readonly>
+                        <div class="form-text">Pembayaran pertama menjadi PSB. Pembayaran berikutnya otomatis BULANAN.</div>
                     </div>
 
                     <div class="col-md-6">

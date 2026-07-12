@@ -54,6 +54,13 @@ class Payment_model extends CI_Model
         return $this->db->insert($this->table, $data);
     }
 
+    public function has_customer_payment($customerId, $customerCode = '')
+    {
+        $this->db->group_start()->where('customer_id', (int) $customerId);
+        if ($customerCode !== '') $this->db->or_where('customer_code', $customerCode);
+        return $this->db->group_end()->limit(1)->count_all_results($this->table) > 0;
+    }
+
     public function delete($id)
     {
         return $this->db

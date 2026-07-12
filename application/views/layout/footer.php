@@ -1,4 +1,7 @@
         </div>
+        <?php if (app_setting('footer_text', '')): ?>
+            <footer class="app-footer"><?= html_escape(app_setting('footer_text')) ?> &copy; <?= date('Y') ?></footer>
+        <?php endif; ?>
     </div>
 
     <div class="app-loader is-active" id="appLoader" aria-live="polite" aria-label="Loading">
@@ -9,7 +12,8 @@
         </div>
     </div>
 
-    <script src="<?= base_url('assets/js/app.js') ?>"></script>
+    <script src="<?= base_url('assets/js/i18n.js') ?>?v=<?= filemtime(FCPATH . 'assets/js/i18n.js') ?>"></script>
+    <script src="<?= base_url('assets/js/app.js') ?>?v=<?= filemtime(FCPATH . 'assets/js/app.js') ?>"></script>
     <?php foreach (($scripts ?? []) as $script): ?>
         <script src="<?= html_escape($script) ?>"></script>
     <?php endforeach; ?>

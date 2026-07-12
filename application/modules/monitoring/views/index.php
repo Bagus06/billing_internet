@@ -14,13 +14,17 @@
         data-summary-url="<?= site_url('monitoring/summary' . (!empty($router) ? '/' . $router['id'] : '')) ?>"
         data-sessions-url="<?= site_url('monitoring/sessions' . (!empty($router) ? '/' . $router['id'] : '')) ?>"
         data-disconnect-url="<?= site_url('monitoring/disconnect') ?>"
+        data-connect-url="<?= site_url('monitoring/connect') ?>"
+        data-traffic-url="<?= site_url('monitoring/traffic' . (!empty($router) ? '/' . $router['id'] : '')) ?>"
+        data-refresh-seconds="<?= (int) app_setting('monitoring_refresh_seconds', 30) ?>"
+        data-traffic-seconds="<?= (int) app_setting('traffic_refresh_seconds', 3) ?>"
     >
         <div class="brand-bar">
-            <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo">
+            <img src="<?= base_url(app_setting('logo_path', 'assets/img/logo.jpeg')) ?>" alt="<?= html_escape(app_setting('isp_name', 'ISP BATARA NET')) ?>" class="brand-logo">
             <div>
                 <div class="menu-eyebrow">
                     <i class="fa-solid fa-chart-line me-2"></i>
-                    ISP BATARA NET
+                    <?= html_escape(app_setting('isp_name', 'ISP BATARA NET')) ?>
                 </div>
                 <div class="brand-subtitle"><?= !empty($router) ? html_escape($router['name'] . ' - ' . $router['host']) : 'Mikrotik API Monitoring' ?></div>
             </div>
@@ -28,28 +32,28 @@
 
         <div class="menu-heading">
             <h1><?= !empty($router) ? html_escape($router['name']) : 'Monitoring Mikrotik' ?></h1>
-            <p>Dashboard awal untuk status router, resource, dan PPPoE active sessions.</p>
+            <p>Status pelanggan PPPoE dengan username <strong>@BATARA.net</strong>, terhubung ke data pelanggan berdasarkan NIK.</p>
         </div>
 
         <div class="row g-3 mt-2">
             <div class="col-md-4">
                 <div class="glass-panel result-box">
-                    <div class="text-muted">Router Online</div>
-                    <h3 id="routerOnlineCount">0</h3>
-                </div>
-            </div>
-
-            <div class="col-md-4">
-                <div class="glass-panel result-box">
-                    <div class="text-muted">Active PPPoE</div>
+                    <div class="text-muted">PPPoE ON</div>
                     <h3 id="activeSessionCount">0</h3>
                 </div>
             </div>
 
             <div class="col-md-4">
                 <div class="glass-panel result-box">
-                    <div class="text-muted">Polling</div>
-                    <h3 id="pollingStatus">30s</h3>
+                    <div class="text-muted">PPPoE OFF</div>
+                    <h3 id="offlineSessionCount">0</h3>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="glass-panel result-box">
+                    <div class="text-muted">Total Secret</div>
+                    <h3 id="totalSecretCount">0</h3>
                 </div>
             </div>
         </div>
@@ -58,62 +62,33 @@
             Menghubungkan ke Mikrotik API...
         </div>
 
-        <div class="card glass-card shadow-sm mt-3">
-            <div class="card-header glass-header">
-                <i class="fa-solid fa-microchip me-2"></i>
-                Resource Mikrotik
+        <div class="monitoring-filter-bar mt-3">
+            <div class="monitoring-search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="search" id="pppoeSearch" class="form-control" placeholder="Cari nama, NIK, ID atau kode pelanggan..." autocomplete="off">
             </div>
-
-            <div class="card-body table-responsive">
-                <table class="table table-bordered table-striped">
-                    <thead>
-                        <tr>
-                            <th>Router</th>
-                            <th>Host</th>
-                            <th>Status</th>
-                            <th>Uptime</th>
-                            <th class="text-end">CPU Load</th>
-                            <th class="text-end">Free Memory</th>
-                        </tr>
-                    </thead>
-                    <tbody id="routerResourceRows">
-                        <tr>
-                            <td colspan="6" class="text-center text-muted">
-                                Memuat resource Mikrotik...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <select id="pppoeSort" class="form-select monitoring-sort" aria-label="Urutkan pelanggan">
+                <option value="status">Status: ON dahulu</option>
+                <option value="name_asc">Nama: A–Z</option>
+                <option value="name_desc">Nama: Z–A</option>
+                <option value="nik_asc">NIK: terkecil</option>
+                <option value="id_asc">ID pelanggan: terkecil</option>
+                <option value="id_desc">ID pelanggan: terbesar</option>
+                <option value="signal_strong">Sinyal: terkuat</option>
+                <option value="signal_weak">Sinyal: terlemah</option>
+            </select>
+            <span class="monitoring-result-count" id="pppoeResultCount">0 pelanggan</span>
         </div>
 
         <div class="card glass-card shadow-sm mt-3">
             <div class="card-header glass-header">
                 <i class="fa-solid fa-list-check me-2"></i>
-                PPPoE Active Sessions
+                Status Pelanggan PPPoE
             </div>
-
-            <div class="card-body table-responsive">
-                <table class="table table-bordered table-striped">
-                    <thead>
-                        <tr>
-                            <th>Username</th>
-                            <th>IP Address</th>
-                            <th>Caller ID</th>
-                            <th>Uptime</th>
-                            <th>Router</th>
-                            <th>Status</th>
-                            <th width="130">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody id="pppoeSessionRows">
-                        <tr>
-                            <td colspan="7" class="text-center text-muted">
-                                Memuat data PPPoE active sessions...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+            <div class="card-body">
+                <div class="pppoe-card-grid" id="pppoeSessionCards">
+                    <div class="pppoe-empty text-muted">Memuat data PPPoE...</div>
+                </div>
             </div>
         </div>
     </section>

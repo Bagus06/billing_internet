@@ -1,8 +1,9 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Calculator extends CI_Controller
+class Calculator extends MY_Controller
 {
+    protected $permission = 'calculator';
     public function index()
     {
         $data = [

@@ -1,0 +1,65 @@
+{
+  "id": "./",
+  "name": "BATARA NET Billing & Network Operations",
+  "short_name": "BATARA Billing",
+  "description": "Aplikasi billing ISP, pengelolaan pelanggan, pembayaran, monitoring PPPoE, dan administrasi MikroTik RouterOS.",
+  "lang": "id",
+  "dir": "ltr",
+  "start_url": "./?source=pwa",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#050914",
+  "theme_color": "#050914",
+  "categories": ["business", "finance", "productivity", "utilities"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "assets/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icons/app-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Monitoring PPPoE",
+      "short_name": "Monitoring",
+      "description": "Buka status dan trafik pelanggan PPPoE.",
+      "url": "monitoring?source=pwa-shortcut",
+      "icons": [{ "src": "assets/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Data Pelanggan",
+      "short_name": "Pelanggan",
+      "description": "Buka pengelolaan pelanggan ISP.",
+      "url": "customers?source=pwa-shortcut",
+      "icons": [{ "src": "assets/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Pembayaran",
+      "short_name": "Pembayaran",
+      "description": "Buka riwayat pembayaran pelanggan.",
+      "url": "payments?source=pwa-shortcut",
+      "icons": [{ "src": "assets/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "PPP Profile MikroTik",
+      "short_name": "PPP Profile",
+      "description": "Kelola PPP Profile langsung melalui RouterOS API.",
+      "url": "mikrotik-profiles?source=pwa-shortcut",
+      "icons": [{ "src": "assets/icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+    }
+  ],
+  "launch_handler": {
+    "client_mode": ["navigate-existing", "auto"]
+  },
+  "handle_links": "preferred"
+}

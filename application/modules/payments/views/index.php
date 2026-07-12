@@ -114,7 +114,7 @@
                                     <td><?= html_escape($payment['payment_method']) ?></td>
                                     <td><?= html_escape($payment['notes']) ?></td>
                                     <td>
-                                        <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('payments/delete/' . $payment['id']) ?>" onclick="return confirm('Hapus pembayaran ini?')">Delete</a>
+                                        <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('payments/delete/' . $payment['id']) ?>" data-confirm="Hapus pembayaran ini?">Delete</a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

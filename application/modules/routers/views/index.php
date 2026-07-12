@@ -63,7 +63,7 @@
                                 <td>
                                     <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('monitoring/router/' . $router['id']) ?>">View</a>
                                     <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('routers/edit/' . $router['id']) ?>">Edit</a>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('routers/delete/' . $router['id']) ?>" onclick="return confirm('Hapus router ini?')">Delete</a>
+                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('routers/delete/' . $router['id']) ?>" data-confirm="Hapus router ini?">Delete</a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

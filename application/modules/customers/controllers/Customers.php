@@ -1,18 +1,22 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Customers extends CI_Controller
+class Customers extends MY_Controller
 {
+    protected $permission = 'customers';
     public function __construct()
     {
         parent::__construct();
         $this->load->model('customers/customer_model');
         $this->load->model('packages/package_model');
+        $this->load->model('routers/router_model');
+        $this->load->library('Mikrotik_sync');
+        $this->load->library('Mikrotik_api');
     }
 
     public function index()
     {
-        $perPage = max(5, min(100, (int) $this->input->get('per_page') ?: 10));
+        $perPage = max(5, min(100, (int) $this->input->get('per_page') ?: (int) app_setting('default_per_page', 10)));
         $page = max(1, (int) $this->input->get('page') ?: 1);
         $filters = $this->filters();
         $totalRows = $this->customer_model->count_filtered($filters);
@@ -44,7 +48,11 @@ class Customers extends CI_Controller
 
     public function store()
     {
-        $this->customer_model->insert($this->payload());
+        $id = $this->customer_model->insert($this->payload());
+        if ($id) {
+            $sync = $this->mikrotik_sync->syncCustomer($id);
+            $this->setSyncFlash('Pelanggan berhasil ditambahkan.', $sync);
+        }
         redirect('customers');
     }
 
@@ -69,6 +77,8 @@ class Customers extends CI_Controller
     public function update($id)
     {
         $this->customer_model->update($id, $this->payload());
+        $sync = $this->mikrotik_sync->syncCustomer($id);
+        $this->setSyncFlash('Pelanggan berhasil diperbarui.', $sync);
         redirect('customers');
     }
 
@@ -78,7 +88,7 @@ class Customers extends CI_Controller
         redirect('customers');
     }
 
-    private function render($view, array $data)
+    protected function render($view, array $data = [], $moduleJsload = null)
     {
         $data['body_class'] = 'monitoring-page';
 
@@ -209,5 +219,82 @@ class Customers extends CI_Controller
             'promoter' => '',
             'notes' => '',
         ];
+    }
+
+    public function toggle_status()
+    {
+        $id = (int) $this->input->post('customer_id');
+        $customer = $this->customer_model->find($id);
+        if (!$customer) { $this->json(false, 'Pelanggan tidak ditemukan.'); return; }
+        $package = $this->package_model->find((int) $customer['package_id']);
+        if (!$package && !empty($customer['package_name'])) $package = $this->package_model->find_by_name($customer['package_name']);
+        if (!$package || empty($package['router_id'])) { $this->json(false, 'Paket pelanggan belum memiliki relasi router.'); return; }
+        $router = $this->router_model->find((int) $package['router_id']);
+        if (!$router || empty($router['is_active'])) { $this->json(false, 'Router pelanggan tidak tersedia atau nonaktif.'); return; }
+
+        $nik = preg_replace('/\D+/', '', (string) $customer['nik']);
+        $username = $nik . app_setting('pppoe_username_suffix', '@BATARA.net');
+        if ($nik === '') { $this->json(false, 'NIK pelanggan kosong sehingga PPP Secret tidak dapat ditemukan.'); return; }
+        $activate = strtoupper((string) $customer['customer_status']) !== 'ACTIVE';
+
+        try {
+            $router['ssl'] = !empty($router['use_ssl']);
+            $api = new Mikrotik_api(); $api->connect($router);
+            $secret = null;
+            $secretCreated = false;
+            foreach ($api->getPppSecrets() as $row) if (isset($row['name']) && strcasecmp($row['name'], $username) === 0) { $secret = $row; break; }
+
+            if (!$secret || empty($secret['.id'])) {
+                if ($activate) {
+                    if (empty($package['ppp_profile_name'])) throw new RuntimeException('Profile MikroTik pada paket pelanggan belum diatur.');
+                    $password = 'BTN-' . substr($nik, -6);
+                    $secretId = $api->createPppSecret(['name' => $username, 'password' => $password, 'service' => 'pppoe', 'profile' => $package['ppp_profile_name'], 'disabled' => 'no']);
+                    if (!$secretId) throw new RuntimeException('PPP Secret ' . $username . ' gagal dibuat di MikroTik. Status database tidak diubah.');
+                    $secret = ['.id' => $secretId, 'name' => $username]; $secretCreated = true;
+                } else {
+                if (!$this->customer_model->update($id, ['customer_status' => 'NONACTIVE'])) {
+                    throw new RuntimeException('Database pelanggan gagal diperbarui.');
+                }
+                $this->customer_model->log_status_change($id, (string) $customer['customer_status'], 'NONACTIVE', isset($this->currentUser['id']) ? $this->currentUser['id'] : null);
+                $api->close();
+                $this->json(true, 'Pelanggan dinonaktifkan di database. PPP Secret tidak ditemukan pada MikroTik.');
+                return;
+                }
+            }
+
+            if ($activate) {
+                $success = $secretCreated ? true : $api->setSecretDisabled($secret['.id'], false);
+            } else {
+                $success = $api->setSecretDisabled($secret['.id'], true);
+                if (!$success) throw new RuntimeException('MikroTik gagal menonaktifkan PPP Secret. Status pelanggan di database tidak diubah.');
+                foreach ($api->getActiveSessions() as $session) {
+                    if (isset($session['name']) && strcasecmp($session['name'], $username) === 0 && !empty($session['.id'])) {
+                        $api->disconnectSession($session['.id']);
+                    }
+                }
+            }
+            if (!$success) throw new RuntimeException('MikroTik gagal mengaktifkan PPP Secret. Status pelanggan di database tidak diubah.');
+            if (!$this->customer_model->update($id, ['customer_status' => $activate ? 'ACTIVE' : 'NONACTIVE'])) {
+                $api->setSecretDisabled($secret['.id'], $activate);
+                $api->close();
+                throw new RuntimeException('Database pelanggan gagal diperbarui; status PPP Secret telah dikembalikan.');
+            }
+            $this->customer_model->log_status_change($id, (string) $customer['customer_status'], $activate ? 'ACTIVE' : 'NONACTIVE', isset($this->currentUser['id']) ? $this->currentUser['id'] : null);
+            $api->close();
+            $this->json(true, $activate ? ($secretCreated ? 'Pelanggan diaktifkan. PPP Secret ' . $username . ' berhasil dibuat.' : 'Pelanggan diaktifkan dan PPP Secret telah di-enable.') : 'Pelanggan dinonaktifkan, PPP Secret di-disable, dan sesi aktif diputus.');
+        } catch (Throwable $e) { $this->json(false, $e->getMessage()); }
+    }
+
+    private function setSyncFlash($message, array $sync)
+    {
+        if ($sync['updated']) $message .= ' PPP Secret mengikuti profile paket.';
+        if ($sync['missing']) $message .= ' PPP Secret belum ditemukan di MikroTik.';
+        $this->session->set_flashdata('success', $message);
+        if (!$sync['success']) $this->session->set_flashdata('error', 'Sinkronisasi MikroTik: ' . implode(' | ', $sync['errors']));
+    }
+
+    private function json($success, $message)
+    {
+        $this->output->set_content_type('application/json')->set_output(json_encode(['success' => (bool) $success, 'message' => $message]));
     }
 }

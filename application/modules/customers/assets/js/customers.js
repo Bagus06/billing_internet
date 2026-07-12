@@ -59,6 +59,42 @@
         updateGroupPreview();
     }
 
+    document.querySelectorAll('.customer-status-toggle').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const willActivate = button.dataset.active !== '1';
+            const customerName = button.dataset.customerName || 'pelanggan';
+            const question = willActivate
+                ? 'Aktifkan pelanggan ' + customerName + ' dan enable PPP Secret?'
+                : 'Nonaktifkan pelanggan ' + customerName + ', disable PPP Secret, dan putus sesi aktif?';
+
+            AppAlert.confirm(question, {
+                icon: willActivate ? 'question' : 'warning',
+                confirmButtonText: willActivate ? 'Ya, aktifkan' : 'Ya, nonaktifkan'
+            }).then(function (result) {
+                if (!result.isConfirmed) return;
+                const formData = new FormData(); formData.append('customer_id', button.dataset.customerId);
+                button.disabled = true;
+                fetch(button.dataset.toggleUrl, { method: 'POST', body: formData, headers: { Accept: 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        return AppAlert.notify(data.message || 'Proses perubahan status selesai.', data.success ? 'success' : 'error').then(function () {
+                            if (data.success) window.location.reload();
+                        });
+                    })
+                    .catch(function () { AppAlert.notify('Gagal mengubah status pelanggan.', 'error'); })
+                    .finally(function () { button.disabled = false; });
+            });
+        });
+    });
+
+    document.querySelectorAll('.customer-copy-secret').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const value = button.dataset.copy || '';
+            navigator.clipboard.writeText(value).then(function () { AppAlert.notify(value + ' berhasil disalin.', 'success'); })
+                .catch(function () { AppAlert.notify('Gagal menyalin data.', 'error'); });
+        });
+    });
+
     const modal = document.getElementById('ktpModal');
     const modalImage = document.getElementById('ktpModalImage');
     const modalTitle = document.getElementById('ktpModalTitle');

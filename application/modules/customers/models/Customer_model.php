@@ -54,12 +54,25 @@ class Customer_model extends CI_Model
             ->row_array();
     }
 
+    public function get_by_package($packageId)
+    {
+        return $this->db->where('package_id', (int) $packageId)->get($this->table)->result_array();
+    }
+
+    public function count_by_package($packageId, $packageName = null)
+    {
+        $this->db->group_start()->where('package_id', (int) $packageId);
+        if ($packageName !== null && $packageName !== '') $this->db->or_where('package_name', $packageName);
+        return (int) $this->db->group_end()->count_all_results($this->table);
+    }
+
     public function insert(array $data)
     {
         $data['created_at'] = date('Y-m-d H:i:s');
         $data['updated_at'] = date('Y-m-d H:i:s');
 
-        return $this->db->insert($this->table, $data);
+        if (!$this->db->insert($this->table, $data)) return false;
+        return $this->db->insert_id();
     }
 
     public function update($id, array $data)
@@ -69,6 +82,13 @@ class Customer_model extends CI_Model
         return $this->db
             ->where('id', (int) $id)
             ->update($this->table, $data);
+    }
+
+    public function log_status_change($customerId, $oldStatus, $newStatus, $userId = null)
+    {
+        return $this->db->insert('customer_status_history', ['customer_id' => (int) $customerId,
+            'old_status' => (string) $oldStatus, 'new_status' => (string) $newStatus,
+            'changed_by' => $userId ? (int) $userId : null, 'changed_at' => date('Y-m-d H:i:s')]);
     }
 
     public function delete($id)

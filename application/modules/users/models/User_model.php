@@ -24,6 +24,19 @@ class User_model extends CI_Model
             ->row_array();
     }
 
+    public function find_with_role($id)
+    {
+        return $this->db->select('users.*, roles.name AS role_name')->from($this->table)
+            ->join('roles', 'roles.id = users.role_id', 'left')->where('users.id', (int) $id)->get()->row_array();
+    }
+
+    public function username_exists($username, $ignoreId = null)
+    {
+        $this->db->where('username', $username);
+        if ($ignoreId !== null) { $this->db->where('id !=', (int) $ignoreId); }
+        return $this->db->count_all_results($this->table) > 0;
+    }
+
     public function insert(array $data)
     {
         if (!empty($data['password'])) {

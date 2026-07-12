@@ -1,0 +1,10 @@
+<main class="container py-4 py-md-5"><div class="page-toolbar mb-3"><a href="<?= site_url('users') ?>" class="back-button"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a></div>
+<section class="menu-shell monitoring-shell"><div class="menu-heading"><h1><?= $mode === 'create' ? 'Tambah User' : 'Edit User' ?></h1></div><?php $this->load->view('../../views/layout/flash'); ?>
+<form method="post" action="<?= $action ?>" class="mt-3"><div class="row g-3">
+<div class="col-md-6"><label class="form-label">Nama</label><input name="name" class="form-control" value="<?= html_escape($user['name']) ?>" required></div>
+<div class="col-md-6"><label class="form-label">Username</label><input name="username" class="form-control" value="<?= html_escape($user['username']) ?>" required></div>
+<div class="col-md-6"><label class="form-label">Email</label><input type="email" name="email" class="form-control" value="<?= html_escape($user['email']) ?>"></div>
+<div class="col-md-6"><label class="form-label">Role</label><select name="role_id" class="form-select" required><option value="">Pilih role</option><?php foreach ($roles as $role): ?><option value="<?= (int) $role['id'] ?>" <?= (int) $user['role_id'] === (int) $role['id'] ? 'selected' : '' ?>><?= html_escape($role['name']) ?></option><?php endforeach; ?></select></div>
+<div class="col-md-6"><label class="form-label">Password</label><input type="password" name="password" class="form-control" <?= $mode === 'create' ? 'required' : '' ?> placeholder="<?= $mode === 'edit' ? 'Kosongkan jika tidak diubah' : '' ?>"></div>
+<div class="col-md-6"><label class="form-label">Status</label><select name="is_active" class="form-select"><option value="1" <?= !empty($user['is_active']) ? 'selected' : '' ?>>Aktif</option><option value="0" <?= empty($user['is_active']) ? 'selected' : '' ?>>Nonaktif</option></select></div>
+</div><button class="back-button border-0 mt-3" type="submit"><i class="fa-solid fa-save"></i><span>Simpan</span></button></form></section></main>

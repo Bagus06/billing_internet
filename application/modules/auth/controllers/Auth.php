@@ -35,6 +35,7 @@ class Auth extends CI_Controller
         }
 
         $this->auth_model->touch_login($user['id']);
+        $this->session->sess_regenerate(true);
         $this->session->set_userdata('auth_user', [
             'id' => (int) $user['id'],
             'role_id' => (int) $user['role_id'],
@@ -53,7 +54,7 @@ class Auth extends CI_Controller
 
     public function logout()
     {
-        $this->session->unset_userdata(['auth_user', 'auth_permissions', 'intended_url']);
+        $this->session->sess_destroy();
         redirect('login');
     }
 }

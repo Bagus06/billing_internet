@@ -10,6 +10,8 @@ class MY_Controller extends CI_Controller
     {
         parent::__construct();
 
+        date_default_timezone_set(app_setting('timezone', 'Asia/Jakarta'));
+
         $this->currentUser = $this->session->userdata('auth_user');
 
         if (!$this->currentUser) {
@@ -29,6 +31,20 @@ class MY_Controller extends CI_Controller
         $permissions = $this->session->userdata('auth_permissions') ?: [];
 
         return in_array($permission, $permissions, true);
+    }
+
+    protected function refreshCurrentUser(array $user)
+    {
+        $authUser = [
+            'id' => (int) $user['id'],
+            'role_id' => (int) $user['role_id'],
+            'role_name' => isset($user['role_name']) ? $user['role_name'] : $this->currentUser['role_name'],
+            'name' => $user['name'],
+            'username' => $user['username'],
+            'email' => $user['email'],
+        ];
+        $this->session->set_userdata('auth_user', $authUser);
+        $this->currentUser = $authUser;
     }
 
     protected function render($view, array $data = [], $moduleJsload = null)

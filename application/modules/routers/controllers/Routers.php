@@ -1,8 +1,9 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Routers extends CI_Controller
+class Routers extends MY_Controller
 {
+    protected $permission = 'routers';
     public function __construct()
     {
         parent::__construct();
@@ -70,7 +71,7 @@ class Routers extends CI_Controller
         redirect('routers');
     }
 
-    private function render($view, array $data)
+    protected function render($view, array $data = [], $moduleJsload = null)
     {
         $data['body_class'] = 'monitoring-page';
 

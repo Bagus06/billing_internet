@@ -1,8 +1,9 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Home extends CI_Controller
+class Home extends MY_Controller
 {
+    protected $permission = 'home';
     public function index()
     {
         $data = [
