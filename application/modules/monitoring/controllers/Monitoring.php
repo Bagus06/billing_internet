@@ -10,7 +10,7 @@ class Monitoring extends MY_Controller
         $this->load->model('routers/router_model');
         $this->load->model('customers/customer_model');
         $this->load->library('Olt_snmp');
-        require_once APPPATH . 'libraries/Mikrotik_api.php';
+        $this->load->library('Mikrotik_query');
     }
 
     public function index($routerId = null)
@@ -22,11 +22,7 @@ class Monitoring extends MY_Controller
             'router' => $router,
         ];
 
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view('index');
-        $this->load->view('../../views/layout/footer', [
-            'module_jsload' => APPPATH . 'modules/monitoring/jsload.php',
-        ]);
+        $this->render('index', $data);
     }
 
     public function router($routerId)
@@ -301,10 +297,7 @@ class Monitoring extends MY_Controller
 
     private function connectRouter(array $router)
     {
-        $api = new Mikrotik_api();
-        $api->connect($router);
-
-        return $api;
+        return $this->mikrotik_query->connect($router);
     }
 
     private function filterRows(array $rows)

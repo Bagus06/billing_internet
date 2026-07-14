@@ -11,7 +11,7 @@ class Customers extends MY_Controller
         $this->load->model('packages/package_model');
         $this->load->model('routers/router_model');
         $this->load->library('Mikrotik_sync');
-        $this->load->library('Mikrotik_api');
+        $this->load->library('Mikrotik_query');
     }
 
     public function index()
@@ -48,7 +48,9 @@ class Customers extends MY_Controller
 
     public function store()
     {
-        $id = $this->customer_model->insert($this->payload());
+        try { $payload = $this->payload('LEAD'); }
+        catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', $e->getMessage()); redirect('customers/create'); return; }
+        $id = $this->customer_model->insert($payload);
         if ($id) {
             $sync = $this->mikrotik_sync->syncCustomer($id);
             $this->setSyncFlash('Pelanggan berhasil ditambahkan.', $sync);
@@ -76,7 +78,11 @@ class Customers extends MY_Controller
 
     public function update($id)
     {
-        $this->customer_model->update($id, $this->payload());
+        $customer = $this->customer_model->find($id);
+        if (!$customer) { show_404(); return; }
+        try { $payload = $this->payload($customer['customer_status']); }
+        catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', $e->getMessage()); redirect('customers/edit/' . $id); return; }
+        $this->customer_model->update($id, $payload);
         $sync = $this->mikrotik_sync->syncCustomer($id);
         $this->setSyncFlash('Pelanggan berhasil diperbarui.', $sync);
         redirect('customers');
@@ -88,28 +94,30 @@ class Customers extends MY_Controller
         redirect('customers');
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
         $data['body_class'] = 'monitoring-page';
-
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view($view, $data);
-        $this->load->view('../../views/layout/footer', [
-            'module_jsload' => APPPATH . 'modules/customers/jsload.php',
-        ]);
+        parent::render($view, $data);
     }
 
-    private function payload()
+    private function payload($status)
     {
-        $nik = trim($this->input->post('nik', true));
-        $ktpPhoto = $this->uploadKtpPhoto();
+        $nik = preg_replace('/\D+/', '', (string) $this->input->post('nik', true));
+        $name = trim((string) $this->input->post('name', true));
+        $name = function_exists('mb_strtoupper') ? mb_strtoupper($name, 'UTF-8') : strtoupper($name);
+        $phone = $this->normalizePhone($this->input->post('phone', true));
         $package = $this->package_model->find((int) $this->input->post('package_id'));
+        if ($name === '') throw new InvalidArgumentException('Nama pelanggan wajib diisi.');
+        if (!preg_match('/^\d{16}$/', $nik)) throw new InvalidArgumentException('NIK wajib terdiri dari tepat 16 digit.');
+        if (!preg_match('/^62\d{8,13}$/', $phone)) throw new InvalidArgumentException('Nomor telepon tidak valid. Gunakan nomor Indonesia aktif, contoh 081234567890.');
+        if (!$package) throw new InvalidArgumentException('Paket internet wajib dipilih.');
+        $ktpPhoto = $this->uploadKtpPhoto();
         $psbDate = $this->input->post('psb_date') ?: null;
 
         return [
             'customer_code' => $this->generateCustomerCode($nik),
-            'name' => trim($this->input->post('name', true)),
-            'phone' => trim($this->input->post('phone', true)),
+            'name' => $name,
+            'phone' => $phone,
             'nik' => $nik,
             'ktp_photo' => $ktpPhoto,
             'address' => trim($this->input->post('address', true)),
@@ -118,10 +126,19 @@ class Customers extends MY_Controller
             'price' => $package ? (float) $package['price'] : 0,
             'psb_date' => $psbDate,
             'group_name' => $this->groupFromPsbDate($psbDate),
-            'customer_status' => trim($this->input->post('customer_status', true)),
+            'customer_status' => strtoupper((string) $status),
             'promoter' => trim($this->input->post('promoter', true)),
             'notes' => trim($this->input->post('notes', true)),
         ];
+    }
+
+    private function normalizePhone($value)
+    {
+        $digits = preg_replace('/\D+/', '', (string) $value);
+        if (strpos($digits, '620') === 0) $digits = '62' . substr($digits, 3);
+        elseif (strpos($digits, '0') === 0) $digits = '62' . substr($digits, 1);
+        elseif (strpos($digits, '8') === 0) $digits = '62' . $digits;
+        return $digits;
     }
 
     private function normalizePrice($value)
@@ -214,7 +231,7 @@ class Customers extends MY_Controller
             'price' => 0,
             'psb_date' => date('Y-m-d'),
             'group_name' => $this->groupFromPsbDate(date('Y-m-d')),
-            'customer_status' => 'ACTIVE',
+            'customer_status' => 'LEAD',
             'payment_status' => 'BELUM BAYAR',
             'promoter' => '',
             'notes' => '',
@@ -239,7 +256,7 @@ class Customers extends MY_Controller
 
         try {
             $router['ssl'] = !empty($router['use_ssl']);
-            $api = new Mikrotik_api(); $api->connect($router);
+            $api = $this->mikrotik_query->connect($router);
             $secret = null;
             $secretCreated = false;
             foreach ($api->getPppSecrets() as $row) if (isset($row['name']) && strcasecmp($row['name'], $username) === 0) { $secret = $row; break; }
@@ -283,6 +300,19 @@ class Customers extends MY_Controller
             $api->close();
             $this->json(true, $activate ? ($secretCreated ? 'Pelanggan diaktifkan. PPP Secret ' . $username . ' berhasil dibuat.' : 'Pelanggan diaktifkan dan PPP Secret telah di-enable.') : 'Pelanggan dinonaktifkan, PPP Secret di-disable, dan sesi aktif diputus.');
         } catch (Throwable $e) { $this->json(false, $e->getMessage()); }
+    }
+
+    public function import_spreadsheet()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        try {
+            $this->load->library('Customer_spreadsheet_import');
+            $r=$this->customer_spreadsheet_import->run();
+            $message='Import selesai: '.$r['customers_created'].' pelanggan baru, '.$r['customers_updated'].' pelanggan diperbarui, '.$r['payments_created'].' pembayaran baru, '.$r['payments_skipped'].' pembayaran duplikat dilewati.';
+            if ($r['errors']) $message.=' Catatan: '.implode(' | ',array_slice($r['errors'],0,5));
+            $this->session->set_flashdata('success',$message);
+        } catch (Throwable $e) { $this->session->set_flashdata('error','Import spreadsheet gagal: '.$e->getMessage()); }
+        redirect('customers');
     }
 
     private function setSyncFlash($message, array $sync)

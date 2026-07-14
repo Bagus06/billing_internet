@@ -11,8 +11,6 @@ class Home extends MY_Controller
             'body_class' => '',
         ];
 
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view('index');
-        $this->load->view('../../views/layout/footer');
+        $this->render('index', $data);
     }
 }

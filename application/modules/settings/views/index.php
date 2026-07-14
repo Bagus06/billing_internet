@@ -3,7 +3,7 @@
     <div class="page-toolbar mb-3"><a href="<?= site_url('/') ?>" class="back-button"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a></div>
     <section class="menu-shell monitoring-shell">
         <div class="menu-heading"><h1>Konfigurasi Aplikasi</h1><p>Kelola identitas ISP, perilaku monitoring, dan parameter umum aplikasi.</p></div>
-        <?php $this->load->view('../../views/layout/flash'); ?>
+        <?php $this->load->view('template/flash'); ?>
         <form method="post" action="<?= site_url('settings/update') ?>" enctype="multipart/form-data" class="settings-form mt-3">
             <div class="card glass-card mb-3"><div class="card-header glass-header"><i class="fa-solid fa-palette me-2"></i>Branding</div><div class="card-body"><div class="row g-3">
                 <div class="col-md-6"><label class="form-label">Nama ISP</label><input class="form-control" name="isp_name" value="<?= html_escape($value('isp_name', 'ISP BATARA NET')) ?>" required><div class="form-text">Ditampilkan pada header, login, dan judul aplikasi.</div></div>
@@ -29,6 +29,7 @@
                 <div class="col-md-6"><label class="form-label">Default Data per Halaman</label><input type="number" min="5" max="100" class="form-control" name="default_per_page" value="<?= (int) $value('default_per_page', 10) ?>"></div>
                 <div class="col-md-6"><label class="form-label">Timezone</label><input class="form-control" name="timezone" value="<?= html_escape($value('timezone', 'Asia/Jakarta')) ?>"><div class="form-text">Gunakan identifier timezone PHP, misalnya Asia/Jakarta.</div></div>
                 <div class="col-md-6"><label class="form-label">Bahasa Default</label><select class="form-select" name="default_language"><option value="id" <?= $value('default_language', 'id') === 'id' ? 'selected' : '' ?>>Indonesia (IN)</option><option value="en" <?= $value('default_language', 'id') === 'en' ? 'selected' : '' ?>>English (EN)</option></select><div class="form-text">Digunakan jika pengguna belum memilih bahasa melalui top bar.</div></div>
+                <div class="col-md-6"><label class="form-label">Tema Default</label><select class="form-select" name="default_theme"><option value="dark" <?= $value('default_theme', 'dark') === 'dark' ? 'selected' : '' ?>>Dark</option><option value="light" <?= $value('default_theme', 'dark') === 'light' ? 'selected' : '' ?>>Light</option></select><div class="form-text">Digunakan jika perangkat belum memiliki preferensi tema.</div></div>
             </div></div></div>
             <button type="submit" class="back-button border-0"><i class="fa-solid fa-floppy-disk"></i><span>Simpan Konfigurasi</span></button>
         </form>

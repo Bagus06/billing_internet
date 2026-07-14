@@ -19,7 +19,7 @@
             </div>
         </div>
 
-        <?php $this->load->view('../../views/layout/flash'); ?>
+        <?php $this->load->view('template/flash'); ?>
 
         <form method="post" action="<?= $action ?>" class="mt-3">
             <div class="row g-3">

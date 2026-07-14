@@ -13,7 +13,7 @@
         'Administrasi':'Administration','Pengguna':'Users','Akun operator aplikasi':'Application operator accounts','Role & Akses':'Roles & Access',
         'Hak akses pengguna':'User permissions','Konfigurasi':'Configuration','Identitas & parameter sistem':'Identity & system parameters',
         'Profile akun saya':'My account profile','Keluar':'Sign Out','Akhiri sesi aplikasi':'End application session',
-        'Kembali':'Back','Simpan':'Save','Edit':'Edit','Delete':'Delete','Tambah':'Add','Cari':'Search','Refresh API':'Refresh API',
+        'Kembali':'Back','Simpan':'Save','Edit':'Edit','Delete':'Delete','Tambah':'Add','Cari':'Search','Refresh API':'Refresh API','Import Spreadsheet':'Import Spreadsheet','Import pelanggan dan pembayaran dari Google Spreadsheet?':'Import customers and payments from Google Spreadsheet?',
         'Action':'Actions','Status':'Status','Aktif':'Active','Nonaktif':'Inactive','Nama':'Name','Keterangan':'Description','Harga':'Price',
         'Berhasil':'Success','Terjadi Kesalahan':'An Error Occurred','Informasi':'Information','Konfirmasi':'Confirmation','Oke':'OK',
         'Ya, lanjutkan':'Yes, continue','Batal':'Cancel','Memuat...':'Loading...','Mohon tunggu sebentar':'Please wait a moment',

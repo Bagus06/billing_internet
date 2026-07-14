@@ -47,6 +47,7 @@ class Settings extends MY_Controller
             'default_per_page' => $this->entry('application', max(5, min(100, (int) $this->input->post('default_per_page'))), 'integer'),
             'timezone' => $this->entry('application', $timezone),
             'default_language' => $this->entry('application', in_array($this->input->post('default_language'), ['id', 'en'], true) ? $this->input->post('default_language') : 'id'),
+            'default_theme' => $this->entry('application', in_array($this->input->post('default_theme'), ['light', 'dark'], true) ? $this->input->post('default_theme') : 'dark'),
             'profit_party_1_name' => $this->entry('finance', trim($this->input->post('profit_party_1_name', true)) ?: 'Pihak Pertama'),
             'profit_party_1_percent' => $this->entry('finance', $profitParty1, 'decimal'),
             'profit_party_2_name' => $this->entry('finance', trim($this->input->post('profit_party_2_name', true)) ?: 'Pihak Kedua'),

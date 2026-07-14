@@ -1,7 +1,7 @@
 <main class="container py-4 py-md-5">
     <div class="page-toolbar mb-3"><a href="<?= site_url('mikrotik-profiles?router_id=' . (int) $router_id) ?>" class="back-button"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a></div>
     <section class="menu-shell monitoring-shell"><div class="menu-heading"><h1><?= $mode === 'create' ? 'Tambah' : 'Edit' ?> PPP Profile</h1><p>Perubahan langsung diterapkan ke MikroTik dan tidak disimpan pada database aplikasi.</p></div>
-        <?php $this->load->view('../../views/layout/flash'); ?>
+        <?php $this->load->view('template/flash'); ?>
         <?php if ($api_error): ?><div class="glass-panel p-3 mt-3 text-warning"><?= html_escape($api_error) ?></div><?php endif; ?>
         <form method="post" action="<?= $action ?>" class="glass-panel p-3 mt-3"><input type="hidden" name="profile_id" value="<?= html_escape($profile['.id'] ?? '') ?>"><div class="row g-3">
             <div class="col-md-6"><label class="form-label">Router <span class="text-danger">*</span></label><select name="router_id" id="profileRouter" class="form-select" required <?= $mode === 'edit' ? 'disabled' : '' ?>><?php foreach ($routers as $router): ?><option value="<?= (int) $router['id'] ?>" <?= (int) $router_id === (int) $router['id'] ? 'selected' : '' ?>><?= html_escape($router['name'] . ' — ' . $router['host']) ?></option><?php endforeach; ?></select><?php if ($mode === 'edit'): ?><input type="hidden" name="router_id" value="<?= (int) $router_id ?>"><?php endif; ?></div>

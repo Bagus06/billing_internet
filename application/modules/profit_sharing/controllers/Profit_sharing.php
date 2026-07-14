@@ -58,5 +58,5 @@ class Profit_sharing extends MY_Controller
         $this->profit_sharing_model->delete($id); $this->session->set_flashdata('success', app_language() === 'en' ? 'Period settings deleted.' : 'Pengaturan periode dihapus.'); redirect('profit-sharing/settings');
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data, $moduleJsload); }
+    protected function render($view, array $data = []) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data); }
 }

@@ -9,7 +9,7 @@ class Mikrotik_profiles extends MY_Controller
     {
         parent::__construct();
         $this->load->model('routers/router_model');
-        $this->load->library('Mikrotik_api');
+        $this->load->library('Mikrotik_query');
     }
 
     public function index()
@@ -20,22 +20,16 @@ class Mikrotik_profiles extends MY_Controller
         $profiles = []; $error = null;
         if ($selectedId) {
             try {
-                $router = $this->router($selectedId); $api = $this->connect($router);
-                $usageMap = [];
-                foreach ($api->getPppSecrets() as $secret) {
-                    if (isset($secret['!done']) || empty($secret['profile'])) continue;
-                    $key = strtolower((string) $secret['profile']);
-                    if (!isset($usageMap[$key])) $usageMap[$key] = [];
-                    $usageMap[$key][] = $secret['name'] ?? ($secret['.id'] ?? 'Secret');
+                $router = $this->router($selectedId);
+                $profiles = $this->mikrotik_query->profilesWithUsage($router);
+                foreach ($profiles as &$profile) {
+                    if (empty($profile['_usage_count'])) {
+                        $profile['_delete_token'] = $this->mikrotik_query->issueDeleteConfirmation(
+                            'ppp_profile', $selectedId, $profile['.id'], $profile['name'] ?? ''
+                        );
+                    }
                 }
-                foreach ($api->getPppProfiles() as $profile) {
-                    if (isset($profile['!done']) || empty($profile['.id'])) continue;
-                    $users = $usageMap[strtolower((string) ($profile['name'] ?? ''))] ?? [];
-                    $profile['_usage_count'] = count($users);
-                    $profile['_usage_examples'] = array_slice($users, 0, 5);
-                    $profiles[] = $profile;
-                }
-                $api->close();
+                unset($profile);
             } catch (Throwable $e) { $error = $e->getMessage(); }
         }
         $this->render('index', ['title' => 'PPP Profile MikroTik', 'routers' => $routers, 'selected_router_id' => $selectedId, 'profiles' => $profiles, 'api_error' => $error]);
@@ -105,12 +99,13 @@ class Mikrotik_profiles extends MY_Controller
     {
         $routerId = (int) $this->input->post('router_id'); $profileId = (string) $this->input->post('profile_id');
         try {
-            $api = $this->connect($this->router($routerId)); $profile = $this->find($api->getPppProfiles(), $profileId);
-            if (!$profile) throw new RuntimeException('PPP Profile tidak ditemukan.');
-            $usage = $this->profileUsage($api, isset($profile['name']) ? $profile['name'] : '');
-            if ($usage['count'] > 0) throw new RuntimeException('Profile ' . $profile['name'] . ' tidak dapat dihapus karena masih digunakan oleh ' . $usage['count'] . ' PPP Secret: ' . implode(', ', $usage['examples']) . '. Pindahkan Secret ke profile lain terlebih dahulu.');
-            if (!$api->deletePppProfile($profileId)) throw new RuntimeException('MikroTik menolak penghapusan profile. Profile mungkin merupakan default atau sedang digunakan.');
-            $api->close(); $this->session->set_flashdata('success', 'PPP Profile ' . $profile['name'] . ' berhasil dihapus dari MikroTik.');
+            if (strtoupper($this->input->method()) !== 'POST') throw new RuntimeException('Metode penghapusan tidak valid.');
+            $profile = $this->mikrotik_query->deletePppProfile(
+                $this->router($routerId), $profileId,
+                (string) $this->input->post('delete_token'),
+                (string) $this->input->post('confirm_phrase')
+            );
+            $this->session->set_flashdata('success', 'PPP Profile ' . $profile['name'] . ' berhasil dihapus dan telah diverifikasi dari MikroTik.');
         } catch (Throwable $e) { $this->session->set_flashdata('error', $e->getMessage()); }
         redirect('mikrotik-profiles?router_id=' . $routerId);
     }
@@ -147,7 +142,7 @@ class Mikrotik_profiles extends MY_Controller
     }
 
     private function router($id) { $router = $this->router_model->find($id); if (!$router || empty($router['is_active'])) throw new RuntimeException('Router aktif tidak ditemukan.'); return $router; }
-    private function connect(array $router) { $router['ssl'] = !empty($router['use_ssl']); $api = new Mikrotik_api(); $api->connect($router); return $api; }
+    private function connect(array $router) { return $this->mikrotik_query->connect($router); }
     private function find(array $rows, $id) { foreach ($rows as $row) if (($row['.id'] ?? '') === $id) return $row; return null; }
     private function profileUsage(Mikrotik_api $api, $profileName)
     {
@@ -163,5 +158,5 @@ class Mikrotik_profiles extends MY_Controller
     private function choice($value) { return in_array($value, ['yes', 'no', 'default'], true) ? $value : 'default'; }
     private function blank() { return ['.id' => '', 'name' => '', 'local-address' => '', 'remote-address' => '', 'rate-limit' => '', 'dns-server' => '8.8.8.8,1.1.1.1', 'only-one' => 'yes', 'change-tcp-mss' => 'yes']; }
     private function fail($message, $url) { $this->session->set_flashdata('error', $message); redirect($url); }
-    protected function render($view, array $data = [], $moduleJsload = null) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data, $moduleJsload); }
+    protected function render($view, array $data = []) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data); }
 }

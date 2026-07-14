@@ -5,7 +5,6 @@ class Payment_model extends CI_Model
 {
     private $table = 'customer_payments';
     private $searchable = [
-        'input_date',
         'customer_code',
         'customer_name',
         'bill_month',
@@ -13,7 +12,6 @@ class Payment_model extends CI_Model
         'package_name',
         'group_name',
         'payment_type',
-        'payment_date',
         'payment_method',
         'notes',
     ];
@@ -77,5 +75,30 @@ class Payment_model extends CI_Model
 
             $this->db->like($field, trim($filters[$field]));
         }
+
+        $this->applyDateRange($filters, 'input_date');
+        $this->applyDateRange($filters, 'payment_date');
+    }
+
+    private function applyDateRange(array $filters, $field)
+    {
+        $from = $this->validDate(isset($filters[$field . '_from']) ? $filters[$field . '_from'] : '');
+        $to = $this->validDate(isset($filters[$field . '_to']) ? $filters[$field . '_to'] : '');
+
+        if ($from !== '') {
+            $this->db->where($field . ' >=', $from);
+        }
+
+        if ($to !== '') {
+            $this->db->where($field . ' <=', $to);
+        }
+    }
+
+    private function validDate($value)
+    {
+        $value = trim((string) $value);
+        $date = DateTime::createFromFormat('!Y-m-d', $value);
+
+        return $date && $date->format('Y-m-d') === $value ? $value : '';
     }
 }

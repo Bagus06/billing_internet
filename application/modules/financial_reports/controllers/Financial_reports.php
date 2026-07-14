@@ -95,8 +95,8 @@ class Financial_reports extends MY_Controller
         return strtr($html, $translations);
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
-        $data['body_class'] = 'monitoring-page'; parent::render($view, $data, $moduleJsload);
+        $data['body_class'] = 'monitoring-page'; parent::render($view, $data);
     }
 }

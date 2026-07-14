@@ -1,255 +1,107 @@
 <main class="container py-4 py-md-5">
     <div class="page-toolbar mb-3">
-        <a href="<?= site_url('/') ?>" class="back-button" aria-label="Kembali ke menu">
-            <i class="fa-solid fa-arrow-left"></i>
-            <span>Kembali</span>
-        </a>
-        <a href="<?= site_url('customers/create') ?>" class="back-button">
-            <i class="fa-solid fa-user-plus"></i>
-            <span>Tambah Pelanggan</span>
-        </a>
+        <a href="<?= site_url('/') ?>" class="back-button" aria-label="Kembali ke menu"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a>
+        <div class="toolbar-actions">
+            <a href="<?= site_url('customers/create') ?>" class="back-button"><i class="fa-solid fa-user-plus"></i><span>Tambah Pelanggan</span></a>
+            <form method="post" action="<?= site_url('customers/import-spreadsheet') ?>" class="d-inline"><button type="submit" class="back-button" data-confirm="Import pelanggan dan pembayaran dari Google Spreadsheet?"><i class="fa-solid fa-file-import"></i><span>Import Spreadsheet</span></button></form>
+        </div>
     </div>
 
     <section class="menu-shell monitoring-shell">
-        <div class="brand-bar">
-            <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo">
-            <div>
-                <div class="menu-eyebrow">
-                    <i class="fa-solid fa-users me-2"></i>
-                    ISP BATARA NET
-                </div>
-                <div class="brand-subtitle">Data Pelanggan</div>
-            </div>
-        </div>
+        <div class="menu-heading"><h1>Data Pelanggan</h1><p>Kelola pelanggan, paket layanan, status aktif, dan pembayaran.</p></div>
+        <?php $this->load->view('template/flash'); ?>
 
-        <div class="menu-heading">
-            <h1>Data Pelanggan</h1>
-            <p>Kelola pelanggan, paket layanan, status aktif, dan status pembayaran.</p>
-        </div>
-
-        <?php $this->load->view('../../views/layout/flash'); ?>
-
-        <div class="card glass-card shadow-sm mt-3">
-            <div class="card-body table-responsive">
-                <?php
-                $queryBase = $filters;
-                $queryBase['per_page'] = $per_page;
-                ?>
-
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-2">
-                    <div class="text-muted small">
-                        Menampilkan <?= count($customers) ?> dari <?= (int) $total_rows ?> pelanggan
-                    </div>
-                    <form method="get" action="<?= site_url('customers') ?>" class="d-flex align-items-center gap-2">
-                        <?php foreach ($filters as $field => $value): ?>
-                            <input type="hidden" name="<?= html_escape($field) ?>" value="<?= html_escape($value) ?>">
-                        <?php endforeach; ?>
-                        <label class="text-muted small">Per page</label>
-                        <select name="per_page" class="form-select customer-page-size" onchange="this.form.submit()">
-                            <?php foreach ([10, 25, 50, 100] as $size): ?>
-                                <option value="<?= $size ?>" <?= (int) $per_page === $size ? 'selected' : '' ?>><?= $size ?></option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
-                </div>
-
-                <form method="get" action="<?= site_url('customers') ?>" class="customer-table-search">
-                    <input type="hidden" name="per_page" value="<?= (int) $per_page ?>">
-                    <table class="table table-bordered table-striped table-nowrap">
-                        <thead>
-                            <tr class="customer-search-row">
-                                <th><input type="text" name="customer_code" class="form-control" placeholder="Cari ID" value="<?= html_escape($filters['customer_code']) ?>"></th>
-                                <th><input type="text" name="name" class="form-control" placeholder="Cari nama" value="<?= html_escape($filters['name']) ?>"></th>
-                                <th><input type="text" name="phone" class="form-control" placeholder="Cari telepon" value="<?= html_escape($filters['phone']) ?>"></th>
-                                <th></th>
-                                <th></th><th></th>
-                                <th><input type="text" name="package_name" class="form-control" placeholder="Cari paket" value="<?= html_escape($filters['package_name']) ?>"></th>
-                                <th></th>
-                                <th><input type="text" name="group_name" class="form-control" placeholder="Cari kelompok" value="<?= html_escape($filters['group_name']) ?>"></th>
-                                <th><input type="text" name="customer_status" class="form-control" placeholder="Cari status" value="<?= html_escape($filters['customer_status']) ?>"></th>
-                                <th><input type="text" name="payment_status" class="form-control" placeholder="Cari bayar" value="<?= html_escape($filters['payment_status']) ?>"></th>
-                                <th>
-                                    <div class="customer-search-actions">
-                                        <button type="submit" class="monitoring-action border-0">
-                                            <i class="fa-solid fa-magnifying-glass"></i>
-                                            Search
-                                        </button>
-                                        <a href="<?= site_url('customers') ?>" class="monitoring-action text-decoration-none d-inline-flex align-items-center">
-                                            Reset
-                                        </a>
-                                    </div>
-                                </th>
-                            </tr>
-                            <tr>
-                                <th>ID</th>
-                                <th>Nama</th>
-                                <th>Telepon</th>
-                                <th>KTP</th><th>Secret Name</th><th>Secret Password</th>
-                                <th>Paket</th>
-                                <th class="text-end">Harga</th>
-                                <th>Kelompok</th>
-                                <th>Status</th>
-                                <th>Pembayaran</th>
-                                <th width="230">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($customers)): ?>
-                                <tr>
-                                    <td colspan="12" class="text-center text-muted">Belum ada data pelanggan.</td>
-                                </tr>
-                            <?php endif; ?>
-
-                            <?php foreach ($customers as $customer): ?>
-                                <?php
-                                $isActive = strtoupper($customer['customer_status']) === 'ACTIVE';
-                                $isPaid = strtoupper($customer['payment_status']) === 'SUDAH BAYAR';
-                                $ktpPhoto = trim($customer['ktp_photo']);
-                                $ktpUrl = preg_match('/^https?:\/\//', $ktpPhoto) ? $ktpPhoto : base_url($ktpPhoto);
-                                $secretNik = preg_replace('/\D+/', '', (string) $customer['nik']);
-                                $secretName = $secretNik !== '' ? $secretNik . app_setting('pppoe_username_suffix', '@BATARA.net') : '-';
-                                $secretPassword = $secretNik !== '' ? 'BTN-' . substr($secretNik, -6) : '-';
-                                ?>
-                                <tr>
-                                    <td><?= html_escape($customer['customer_code']) ?></td>
-                                    <td>
-                                        <strong><?= html_escape($customer['name']) ?></strong>
-                                        <?php if (!empty($customer['promoter'])): ?>
-                                            <div class="text-muted small">Promotor: <?= html_escape($customer['promoter']) ?></div>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><?= html_escape($customer['phone']) ?></td>
-                                    <td>
-                                        <?php if (!empty($ktpPhoto)): ?>
-                                            <button type="button" class="monitoring-action customer-ktp-button" data-ktp-src="<?= html_escape($ktpUrl) ?>" data-ktp-name="<?= html_escape($customer['name']) ?>">
-                                                View KTP
-                                            </button>
-                                        <?php else: ?>
-                                            <span class="text-muted small">Belum ada</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td><div class="d-flex align-items-center gap-1"><code><?= html_escape($secretName) ?></code><?php if($secretNik!==''): ?><button type="button" class="monitoring-action customer-copy-secret" data-copy="<?= html_escape($secretName) ?>" title="Copy secret name"><i class="fa-regular fa-copy"></i></button><?php endif; ?></div></td>
-                                    <td><div class="d-flex align-items-center gap-1"><code><?= html_escape($secretPassword) ?></code><?php if($secretNik!==''): ?><button type="button" class="monitoring-action customer-copy-secret" data-copy="<?= html_escape($secretPassword) ?>" title="Copy password"><i class="fa-regular fa-copy"></i></button><?php endif; ?></div></td>
-                                    <td><?= html_escape($customer['package_name']) ?></td>
-                                    <td class="text-end">Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?></td>
-                                    <td><?= html_escape($customer['group_name']) ?></td>
-                                    <td>
-                                        <button type="button" class="monitoring-badge customer-status-toggle border-0 <?= $isActive ? 'is-online' : 'is-offline' ?>" data-toggle-url="<?= site_url('customers/toggle-status') ?>" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-name="<?= html_escape($customer['name']) ?>" data-active="<?= $isActive ? '1' : '0' ?>" title="Klik untuk mengubah status pelanggan">
-                                            <?= html_escape($customer['customer_status']) ?>
-                                        </button>
-                                    </td>
-                                    <td>
-                                        <span class="monitoring-badge <?= $isPaid ? 'is-online' : 'is-offline' ?>">
-                                            <?= html_escape($customer['payment_status']) ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                    <button
-                                        type="button"
-                                        class="monitoring-action customer-pay-button"
-                                        data-customer-id="<?= (int) $customer['id'] ?>"
-                                        data-customer-code="<?= html_escape($customer['customer_code']) ?>"
-                                        data-customer-name="<?= html_escape($customer['name']) ?>"
-                                        data-customer-price="Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?>"
-                                    >
-                                        Bayar
-                                    </button>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('customers/edit/' . $customer['id']) ?>">Edit</a>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('customers/delete/' . $customer['id']) ?>" data-confirm="Hapus pelanggan ini?">Delete</a>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        </tbody>
-                    </table>
+        <?php $queryBase = $filters; $queryBase['per_page'] = $per_page; ?>
+        <div class="customer-card-toolbar mt-3">
+            <form method="get" action="<?= site_url('customers') ?>" class="customer-card-filter">
+                <input type="hidden" name="per_page" value="<?= (int) $per_page ?>">
+                <label class="customer-filter-field"><span><i class="fa-solid fa-id-badge"></i> ID Pelanggan</span><input type="text" name="customer_code" class="form-control" placeholder="Cari ID" value="<?= html_escape($filters['customer_code']) ?>"></label>
+                <label class="customer-filter-field"><span><i class="fa-solid fa-user"></i> Nama</span><input type="text" name="name" class="form-control" placeholder="Cari nama" value="<?= html_escape($filters['name']) ?>"></label>
+                <label class="customer-filter-field"><span><i class="fa-solid fa-phone"></i> Telepon</span><input type="text" name="phone" class="form-control" placeholder="Cari telepon" value="<?= html_escape($filters['phone']) ?>"></label>
+                <label class="customer-filter-field"><span><i class="fa-solid fa-wifi"></i> Paket</span><input type="text" name="package_name" class="form-control" placeholder="Cari paket" value="<?= html_escape($filters['package_name']) ?>"></label>
+                <label class="customer-filter-field"><span><i class="fa-solid fa-layer-group"></i> Kelompok</span><input type="text" name="group_name" class="form-control" placeholder="Cari kelompok" value="<?= html_escape($filters['group_name']) ?>"></label>
+                <label class="customer-filter-field"><span><i class="fa-solid fa-signal"></i> Status</span><input type="text" name="customer_status" class="form-control" placeholder="Cari status" value="<?= html_escape($filters['customer_status']) ?>"></label>
+                <label class="customer-filter-field"><span><i class="fa-solid fa-wallet"></i> Pembayaran</span><input type="text" name="payment_status" class="form-control" placeholder="Cari pembayaran" value="<?= html_escape($filters['payment_status']) ?>"></label>
+                <div class="customer-filter-actions"><button type="submit" class="monitoring-action border-0"><i class="fa-solid fa-magnifying-glass"></i> Cari</button><a href="<?= site_url('customers') ?>" class="monitoring-action text-decoration-none"><i class="fa-solid fa-rotate-left"></i> Reset</a></div>
+            </form>
+            <div class="customer-card-summary">
+                <span>Menampilkan <strong><?= count($customers) ?></strong> dari <strong><?= (int) $total_rows ?></strong> pelanggan</span>
+                <form method="get" action="<?= site_url('customers') ?>" class="d-flex align-items-center gap-2">
+                    <?php foreach ($filters as $field => $value): ?><input type="hidden" name="<?= html_escape($field) ?>" value="<?= html_escape($value) ?>"><?php endforeach; ?>
+                    <label for="customerPageSize">Per halaman</label><select id="customerPageSize" name="per_page" class="form-select customer-page-size" onchange="this.form.submit()"><?php foreach ([10, 25, 50, 100] as $size): ?><option value="<?= $size ?>" <?= (int) $per_page === $size ? 'selected' : '' ?>><?= $size ?></option><?php endforeach; ?></select>
                 </form>
-
-                <div class="customer-pagination mt-3">
-                    <?php
-                    $prevQuery = $queryBase;
-                    $nextQuery = $queryBase;
-                    $prevQuery['page'] = max(1, $page - 1);
-                    $nextQuery['page'] = min($total_pages, $page + 1);
-                    ?>
-                    <a class="back-button <?= $page <= 1 ? 'is-disabled' : '' ?>" href="<?= $page <= 1 ? '#' : site_url('customers?' . http_build_query($prevQuery)) ?>">
-                        <i class="fa-solid fa-chevron-left"></i>
-                        <span>Prev</span>
-                    </a>
-                    <span class="customer-page-indicator">Page <?= (int) $page ?> / <?= (int) $total_pages ?></span>
-                    <a class="back-button <?= $page >= $total_pages ? 'is-disabled' : '' ?>" href="<?= $page >= $total_pages ? '#' : site_url('customers?' . http_build_query($nextQuery)) ?>">
-                        <span>Next</span>
-                        <i class="fa-solid fa-chevron-right"></i>
-                    </a>
-                </div>
             </div>
+        </div>
+
+        <?php if (empty($customers)): ?>
+            <div class="customer-empty-state"><i class="fa-solid fa-users-slash"></i><strong>Data pelanggan tidak ditemukan</strong><span>Coba ubah kata kunci atau reset filter pencarian.</span></div>
+        <?php else: ?>
+            <div class="customer-card-grid">
+                <?php foreach ($customers as $customer): ?>
+                    <?php
+                    $isActive = strtoupper((string) $customer['customer_status']) === 'ACTIVE';
+                    $isPaid = strtoupper((string) $customer['payment_status']) === 'SUDAH BAYAR';
+                    $ktpPhoto = trim((string) $customer['ktp_photo']);
+                    $ktpUrl = preg_match('/^https?:\/\//', $ktpPhoto) ? $ktpPhoto : ($ktpPhoto !== '' ? base_url($ktpPhoto) : '');
+                    $secretNik = preg_replace('/\D+/', '', (string) $customer['nik']);
+                    $secretName = $secretNik !== '' ? $secretNik . app_setting('pppoe_username_suffix', '@BATARA.net') : '-';
+                    $secretPassword = $secretNik !== '' ? 'BTN-' . substr($secretNik, -6) : '-';
+                    $initial = function_exists('mb_substr') ? mb_substr(trim((string) $customer['name']), 0, 1, 'UTF-8') : substr(trim((string) $customer['name']), 0, 1);
+                    ?>
+                    <article class="customer-profile-card <?= $isActive ? 'is-active' : 'is-inactive' ?>" tabindex="0" role="button" data-customer-detail
+                        data-id="<?= (int) $customer['id'] ?>" data-code="<?= html_escape($customer['customer_code']) ?>" data-name="<?= html_escape($customer['name']) ?>"
+                        data-phone="<?= html_escape($customer['phone']) ?>" data-nik="<?= html_escape($customer['nik']) ?>" data-address="<?= html_escape($customer['address']) ?>"
+                        data-package="<?= html_escape($customer['package_name']) ?>" data-price="Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?>"
+                        data-group="<?= html_escape($customer['group_name']) ?>" data-status="<?= html_escape($customer['customer_status']) ?>" data-payment="<?= html_escape($customer['payment_status']) ?>"
+                        data-promoter="<?= html_escape($customer['promoter']) ?>" data-psb-date="<?= html_escape($customer['psb_date']) ?>" data-notes="<?= html_escape($customer['notes']) ?>"
+                        data-secret-name="<?= html_escape($secretName) ?>" data-secret-password="<?= html_escape($secretPassword) ?>" data-ktp-src="<?= html_escape($ktpUrl) ?>">
+                        <div class="customer-card-main">
+                            <div class="customer-avatar" aria-hidden="true"><?= html_escape(strtoupper($initial ?: '?')) ?></div>
+                            <div class="customer-card-identity"><span class="customer-code"><?= html_escape($customer['customer_code']) ?></span><h2><?= html_escape($customer['name']) ?></h2><span><i class="fa-solid fa-phone"></i> <?= html_escape($customer['phone'] ?: '-') ?></span></div>
+                            <div class="customer-card-status"><span class="monitoring-badge <?= $isActive ? 'is-online' : 'is-offline' ?>"><?= html_escape($customer['customer_status']) ?></span><span class="monitoring-badge <?= $isPaid ? 'is-online' : 'is-offline' ?>"><?= html_escape($customer['payment_status']) ?></span></div>
+                        </div>
+                        <div class="customer-card-service"><div><span>Paket Internet</span><strong><?= html_escape($customer['package_name'] ?: '-') ?></strong></div><div><span>Biaya Bulanan</span><strong>Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?></strong></div><div><span>Kelompok</span><strong><?= html_escape($customer['group_name'] ?: '-') ?></strong></div></div>
+                        <div class="customer-card-footer"><span><i class="fa-regular fa-eye"></i> Klik card untuk melihat detail</span>
+                            <details class="customer-action-menu" data-customer-action-menu><summary aria-label="Buka menu aksi"><i class="fa-solid fa-ellipsis"></i><span>Aksi</span></summary><div class="customer-action-dropdown">
+                                <button type="button" class="customer-action-item customer-pay-button" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-code="<?= html_escape($customer['customer_code']) ?>" data-customer-name="<?= html_escape($customer['name']) ?>" data-customer-price="Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?>"><i class="fa-solid fa-wallet"></i> Bayar</button>
+                                <button type="button" class="customer-action-item customer-status-toggle" data-toggle-url="<?= site_url('customers/toggle-status') ?>" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-name="<?= html_escape($customer['name']) ?>" data-active="<?= $isActive ? '1' : '0' ?>"><i class="fa-solid <?= $isActive ? 'fa-user-slash' : 'fa-user-check' ?>"></i> <?= $isActive ? 'Nonaktifkan' : 'Aktifkan' ?></button>
+                                <a class="customer-action-item" href="<?= site_url('customers/edit/' . $customer['id']) ?>"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
+                                <a class="customer-action-item is-danger" href="<?= site_url('customers/delete/' . $customer['id']) ?>" data-confirm="Hapus pelanggan ini?"><i class="fa-solid fa-trash"></i> Hapus</a>
+                            </div></details>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <div class="customer-pagination mt-4">
+            <?php $prevQuery = $queryBase; $nextQuery = $queryBase; $prevQuery['page'] = max(1, $page - 1); $nextQuery['page'] = min($total_pages, $page + 1); ?>
+            <a class="back-button <?= $page <= 1 ? 'is-disabled' : '' ?>" href="<?= $page <= 1 ? '#' : site_url('customers?' . http_build_query($prevQuery)) ?>"><i class="fa-solid fa-chevron-left"></i><span>Prev</span></a>
+            <span class="customer-page-indicator">Page <?= (int) $page ?> / <?= (int) $total_pages ?></span>
+            <a class="back-button <?= $page >= $total_pages ? 'is-disabled' : '' ?>" href="<?= $page >= $total_pages ? '#' : site_url('customers?' . http_build_query($nextQuery)) ?>"><span>Next</span><i class="fa-solid fa-chevron-right"></i></a>
         </div>
     </section>
 
-    <div class="ktp-modal" id="ktpModal" aria-hidden="true">
-        <div class="ktp-modal-backdrop" data-ktp-close></div>
-        <div class="ktp-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ktpModalTitle">
-            <div class="ktp-modal-header">
-                <strong id="ktpModalTitle">Foto KTP</strong>
-                <button type="button" class="ktp-modal-close" data-ktp-close aria-label="Tutup preview KTP">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
+    <div class="ktp-modal customer-detail-modal" id="customerDetailModal" aria-hidden="true">
+        <div class="ktp-modal-backdrop" data-customer-detail-close></div><div class="ktp-modal-panel customer-detail-panel" role="dialog" aria-modal="true" aria-labelledby="customerDetailTitle">
+            <div class="ktp-modal-header"><div class="customer-detail-title"><span class="customer-detail-icon"><i class="fa-solid fa-user"></i></span><div><small>Detail Pelanggan</small><strong id="customerDetailTitle">-</strong></div></div><button type="button" class="ktp-modal-close" data-customer-detail-close aria-label="Tutup detail"><i class="fa-solid fa-xmark"></i></button></div>
+            <div class="customer-detail-body">
+                <div class="customer-detail-highlight"><div><span>ID Pelanggan</span><strong data-detail="code">-</strong></div><div><span>Status</span><strong data-detail="status">-</strong></div><div><span>Pembayaran</span><strong data-detail="payment">-</strong></div></div>
+                <div class="customer-detail-grid">
+                    <div><span><i class="fa-solid fa-id-card"></i> NIK</span><strong data-detail="nik">-</strong></div><div><span><i class="fa-solid fa-phone"></i> Telepon</span><strong data-detail="phone">-</strong></div><div><span><i class="fa-solid fa-wifi"></i> Paket</span><strong data-detail="package">-</strong></div><div><span><i class="fa-solid fa-money-bill-wave"></i> Biaya</span><strong data-detail="price">-</strong></div><div><span><i class="fa-solid fa-layer-group"></i> Kelompok</span><strong data-detail="group">-</strong></div><div><span><i class="fa-solid fa-calendar-check"></i> Tanggal PSB</span><strong data-detail="psbDate">-</strong></div><div><span><i class="fa-solid fa-user-tag"></i> Promotor</span><strong data-detail="promoter">-</strong></div><div class="is-wide"><span><i class="fa-solid fa-location-dot"></i> Alamat</span><strong data-detail="address">-</strong></div><div class="is-wide"><span><i class="fa-solid fa-note-sticky"></i> Catatan</span><strong data-detail="notes">-</strong></div>
+                </div>
+                <div class="customer-secret-box"><div><span>PPP Secret Name</span><code data-detail="secretName">-</code><button type="button" class="customer-copy-secret" data-detail-copy="secretName"><i class="fa-regular fa-copy"></i></button></div><div><span>PPP Password</span><code data-detail="secretPassword">-</code><button type="button" class="customer-copy-secret" data-detail-copy="secretPassword"><i class="fa-regular fa-copy"></i></button></div></div>
+                <button type="button" class="monitoring-action customer-detail-ktp" data-detail-ktp disabled><i class="fa-solid fa-id-card"></i> Lihat Foto KTP</button>
             </div>
-            <img src="" alt="Foto KTP" id="ktpModalImage">
         </div>
     </div>
 
-    <div class="ktp-modal" id="paymentModal" aria-hidden="true">
-        <div class="ktp-modal-backdrop" data-payment-close></div>
-        <div class="ktp-modal-panel payment-modal-panel" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle">
-            <div class="ktp-modal-header">
-                <strong id="paymentModalTitle">Pembayaran Pelanggan</strong>
-                <button type="button" class="ktp-modal-close" data-payment-close aria-label="Tutup pembayaran">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            </div>
+    <div class="ktp-modal" id="ktpModal" aria-hidden="true"><div class="ktp-modal-backdrop" data-ktp-close></div><div class="ktp-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ktpModalTitle"><div class="ktp-modal-header"><strong id="ktpModalTitle">Foto KTP</strong><button type="button" class="ktp-modal-close" data-ktp-close aria-label="Tutup preview KTP"><i class="fa-solid fa-xmark"></i></button></div><img src="" alt="Foto KTP" id="ktpModalImage"></div></div>
 
-            <form method="post" action="<?= site_url('payments/store') ?>">
-                <input type="hidden" name="customer_id" id="paymentCustomerId">
-                <input type="hidden" name="redirect_to" value="<?= html_escape(uri_string() . ($_SERVER['QUERY_STRING'] ? '?' . $_SERVER['QUERY_STRING'] : '')) ?>">
-
-                <div class="payment-customer-summary mb-3">
-                    <strong id="paymentCustomerName">-</strong>
-                    <span id="paymentCustomerCode">-</span>
-                    <span id="paymentCustomerPrice">-</span>
-                </div>
-
-                <div class="row g-3">
-                    <div class="col-md-6">
-                        <label class="form-label">Pembayaran</label>
-                        <input type="text" class="form-control" value="Otomatis oleh sistem" readonly>
-                        <div class="form-text">Pembayaran pertama menjadi PSB. Pembayaran berikutnya otomatis BULANAN.</div>
-                    </div>
-
-                    <div class="col-md-6">
-                        <label class="form-label">Metode Bayar</label>
-                        <select name="payment_method" class="form-select" required>
-                            <option value="CASH">CASH</option>
-                            <option value="SEABANK">SEABANK</option>
-                        </select>
-                    </div>
-
-                    <div class="col-md-12">
-                        <label class="form-label">Tanggal Bayar</label>
-                        <input type="date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>" required>
-                    </div>
-
-                    <div class="col-md-12">
-                        <label class="form-label">Keterangan</label>
-                        <input type="text" name="notes" class="form-control" placeholder="Opsional">
-                    </div>
-                </div>
-
-                <div class="mt-3">
-                    <button type="submit" class="back-button border-0">
-                        <i class="fa-solid fa-check"></i>
-                        <span>Submit Pembayaran</span>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
+    <div class="ktp-modal" id="paymentModal" aria-hidden="true"><div class="ktp-modal-backdrop" data-payment-close></div><div class="ktp-modal-panel payment-modal-panel" role="dialog" aria-modal="true" aria-labelledby="paymentModalTitle"><div class="ktp-modal-header"><strong id="paymentModalTitle">Pembayaran Pelanggan</strong><button type="button" class="ktp-modal-close" data-payment-close aria-label="Tutup pembayaran"><i class="fa-solid fa-xmark"></i></button></div>
+        <form method="post" action="<?= site_url('payments/store') ?>" data-customer-payment-form><input type="hidden" name="customer_id" id="paymentCustomerId"><input type="hidden" name="redirect_to" value="<?= html_escape(uri_string() . (!empty($_SERVER['QUERY_STRING']) ? '?' . $_SERVER['QUERY_STRING'] : '')) ?>">
+            <div class="payment-customer-summary mb-3"><strong id="paymentCustomerName">-</strong><span id="paymentCustomerCode">-</span><span id="paymentCustomerPrice">-</span></div>
+            <div class="row g-3"><div class="col-md-6"><label class="form-label">Pembayaran</label><input type="text" class="form-control" value="Otomatis oleh sistem" readonly><div class="form-text">Pembayaran pertama menjadi PSB. Pembayaran berikutnya otomatis BULANAN.</div></div><div class="col-md-6"><label class="form-label">Metode Bayar</label><select name="payment_method" class="form-select" required><option value="CASH">CASH</option><option value="SEABANK">SEABANK</option></select></div><div class="col-md-12"><label class="form-label">Tanggal Bayar</label><input type="date" name="payment_date" class="form-control" value="<?= date('Y-m-d') ?>" required></div><div class="col-md-12"><label class="form-label">Keterangan</label><input type="text" name="notes" class="form-control" placeholder="Opsional"></div></div>
+            <div class="mt-3"><button type="submit" class="back-button border-0" data-payment-submit><i class="fa-solid fa-check"></i><span>Submit Pembayaran</span></button></div>
+        </form></div></div>
 </main>

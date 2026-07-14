@@ -7,8 +7,9 @@
     const disconnectUrl = app.dataset.disconnectUrl;
     const connectUrl = app.dataset.connectUrl;
     const trafficUrl = app.dataset.trafficUrl;
+    const isMobile = window.matchMedia('(max-width: 767.98px), (pointer: coarse)').matches;
     const refreshMilliseconds = Math.max(10, Number(app.dataset.refreshSeconds) || 30) * 1000;
-    const trafficMilliseconds = Math.max(2, Number(app.dataset.trafficSeconds) || 3) * 1000;
+    const trafficMilliseconds = Math.max(isMobile ? 5 : 2, Number(app.dataset.trafficSeconds) || 3) * 1000;
     const activeCount = document.getElementById('activeSessionCount');
     const offlineCount = document.getElementById('offlineSessionCount');
     const totalCount = document.getElementById('totalSecretCount');
@@ -22,6 +23,9 @@
     let activeModalSource = null;
     let activeBackdrop = null;
     const trafficSamples = new Map();
+    const trafficElements = new Map();
+    let sessionsLoading = false;
+    let trafficLoading = false;
 
     function escapeHtml(value) {
         return String(value === undefined || value === null || value === '' ? '-' : value)
@@ -113,8 +117,8 @@
                 row.download_rate = downloadRate;
                 row.upload_rate = uploadRate;
             }
-            document.querySelectorAll('.pppoe-traffic[data-traffic-key]').forEach(function (element) {
-                if (element.dataset.trafficKey !== key) return;
+            const elements = trafficElements.get(key) || [];
+            elements.forEach(function (element) {
                 const down = element.querySelector('.traffic-download');
                 const up = element.querySelector('.traffic-upload');
                 if (down) down.textContent = formatRate(downloadRate);
@@ -124,6 +128,7 @@
     }
 
     function renderCards(rows) {
+        trafficElements.clear();
         if (!rows.length) {
             cards.innerHTML = '<div class="pppoe-empty text-muted">Tidak ada PPP Secret yang ditemukan.</div>';
             return;
@@ -210,6 +215,11 @@
                 </div>
             </article>`;
         }).join('');
+        cards.querySelectorAll('.pppoe-traffic[data-traffic-key]').forEach(function (element) {
+            const key = element.dataset.trafficKey;
+            if (!trafficElements.has(key)) trafficElements.set(key, []);
+            trafficElements.get(key).push(element);
+        });
     }
 
     function compareText(a, b) {
@@ -277,6 +287,8 @@
     }
 
     async function loadSessions() {
+        if (sessionsLoading || document.hidden) return;
+        sessionsLoading = true;
         try {
             const response = await fetch(sessionsUrl, { loader: false, headers: { Accept: 'application/json' } });
             if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -290,6 +302,8 @@
             setMessage(data.errors && data.errors.length ? data.errors.join(' | ') : 'Data berhasil diperbarui.', data.errors && data.errors.length);
         } catch (error) {
             setMessage('Gagal mengambil data monitoring.', true);
+        } finally {
+            sessionsLoading = false;
         }
     }
 
@@ -312,6 +326,8 @@
     }
 
     async function loadTraffic() {
+        if (trafficLoading || document.hidden) return;
+        trafficLoading = true;
         try {
             const response = await fetch(trafficUrl, { loader: false, headers: { Accept: 'application/json' } });
             if (!response.ok) return;
@@ -319,6 +335,8 @@
             applyTrafficSamples(data.rows || []);
         } catch (error) {
             // Polling utama tetap berjalan jika endpoint traffic sesaat gagal.
+        } finally {
+            trafficLoading = false;
         }
     }
 
@@ -381,4 +399,7 @@
     setTimeout(loadTraffic, 1500);
     setInterval(loadTraffic, trafficMilliseconds);
     setInterval(loadSessions, refreshMilliseconds);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) { loadSessions(); loadTraffic(); }
+    });
 })();

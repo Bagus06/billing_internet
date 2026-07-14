@@ -71,13 +71,10 @@ class Routers extends MY_Controller
         redirect('routers');
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
         $data['body_class'] = 'monitoring-page';
-
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view($view, $data);
-        $this->load->view('../../views/layout/footer');
+        parent::render($view, $data);
     }
 
     private function payload()

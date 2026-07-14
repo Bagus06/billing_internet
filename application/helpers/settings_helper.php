@@ -20,6 +20,8 @@ function app_language()
 {
     $CI =& get_instance();
     $sessionLanguage = isset($CI->session) ? $CI->session->userdata('app_language') : null;
-    $language = $sessionLanguage ?: app_setting('default_language', 'id');
+    $authUser = isset($CI->session) ? $CI->session->userdata('auth_user') : null;
+    $userLanguage = is_array($authUser) && isset($authUser['preferred_language']) ? $authUser['preferred_language'] : null;
+    $language = $sessionLanguage ?: $userLanguage ?: app_setting('default_language', 'id');
     return in_array($language, ['id', 'en'], true) ? $language : 'id';
 }

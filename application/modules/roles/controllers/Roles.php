@@ -78,5 +78,5 @@ class Roles extends MY_Controller
         if (trim($this->input->post('name', true)) !== '') { return true; }
         $this->session->set_flashdata('error', 'Nama role wajib diisi.'); return false;
     }
-    protected function render($view, array $data = [], $moduleJsload = null) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data, $moduleJsload); }
+    protected function render($view, array $data = []) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data); }
 }

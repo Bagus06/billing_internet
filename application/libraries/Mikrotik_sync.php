@@ -11,7 +11,7 @@ class Mikrotik_sync
         $this->CI->load->model('routers/router_model');
         $this->CI->load->model('packages/package_model');
         $this->CI->load->model('customers/customer_model');
-        $this->CI->load->library('Mikrotik_api');
+        $this->CI->load->library('Mikrotik_query');
     }
 
     public function syncPackageCustomers($packageId)
@@ -45,9 +45,7 @@ class Mikrotik_sync
         $failedItems = [];
 
         try {
-            $router['ssl'] = !empty($router['use_ssl']);
-            $api = new Mikrotik_api();
-            $api->connect($router);
+            $api = $this->CI->mikrotik_query->connect($router);
             $secrets = $this->indexSecrets($api->getPppSecrets());
 
             foreach ($customers as $customer) {

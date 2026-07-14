@@ -12,11 +12,7 @@ class Calculator extends MY_Controller
             'splitter_loss' => $this->splitterLoss(),
         ];
 
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view('index', $data);
-        $this->load->view('../../views/layout/footer', [
-            'module_jsload' => APPPATH . 'modules/calculator/jsload.php',
-        ]);
+        $this->render('index', $data);
     }
 
     private function splitterLoss()

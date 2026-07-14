@@ -11,7 +11,7 @@ class Packages extends MY_Controller
         $this->load->model('packages/package_model');
         $this->load->model('customers/customer_model');
         $this->load->model('routers/router_model');
-        $this->load->library('Mikrotik_api');
+        $this->load->library('Mikrotik_query');
         $this->load->library('Mikrotik_sync');
     }
 
@@ -24,16 +24,20 @@ class Packages extends MY_Controller
         $syncMessage = $profileSync['synced'] . ' profile · ' . $secretSync['updated'] . ' secret';
         if ($profileSync['skipped']) $syncMessage .= ' ' . $profileSync['skipped'] . ' paket dilewati.';
         if ($secretSync['missing']) $syncMessage .= ' ' . $secretSync['missing'] . ' Secret tidak ditemukan.';
+        $syncStatus = [
+            'success' => !$syncFailed,
+            'message' => $syncMessage,
+            'detail' => $syncErrors ? implode(' | ', $syncErrors) : 'Sinkronisasi otomatis berhasil',
+            'profiles' => ['success' => $profileSync['success_items'], 'failed' => $profileSync['failed_items']],
+            'secrets' => ['success' => $secretSync['success_items'], 'failed' => $secretSync['failed_items']],
+        ];
         $this->render('index', [
             'title' => 'Paket Internet - ' . app_setting('isp_name', 'ISP BATARA NET'),
             'packages' => $this->package_model->get_all(),
-            'sync_status' => [
-                'success' => !$syncFailed,
-                'message' => $syncMessage,
-                'detail' => $syncErrors ? implode(' | ', $syncErrors) : 'Sinkronisasi otomatis berhasil',
-                'profiles' => ['success' => $profileSync['success_items'], 'failed' => $profileSync['failed_items']],
-                'secrets' => ['success' => $secretSync['success_items'], 'failed' => $secretSync['failed_items']],
-            ],
+            'topbar_elements' => [[
+                'view' => 'topbar_sync',
+                'data' => ['sync_status' => $syncStatus],
+            ]],
         ]);
     }
 
@@ -227,10 +231,10 @@ class Packages extends MY_Controller
         return $result;
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
         $data['body_class'] = 'monitoring-page';
-        parent::render($view, $data, $moduleJsload);
+        parent::render($view, $data);
     }
 
     private function form($mode, array $package, $action)
@@ -440,10 +444,7 @@ class Packages extends MY_Controller
 
     private function connectRouter(array $router)
     {
-        $router['ssl'] = !empty($router['use_ssl']);
-        $api = new Mikrotik_api();
-        $api->connect($router);
-        return $api;
+        return $this->mikrotik_query->connect($router);
     }
 
     private function fail($message, $redirect)

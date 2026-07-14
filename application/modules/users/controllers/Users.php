@@ -109,7 +109,7 @@ class Users extends MY_Controller
         return true;
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
         $data['body_class'] = 'monitoring-page';
         parent::render($view, $data);

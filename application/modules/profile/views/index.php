@@ -2,7 +2,7 @@
     <div class="page-toolbar mb-3"><a href="<?= site_url('/') ?>" class="back-button"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a></div>
     <section class="menu-shell monitoring-shell">
         <div class="menu-heading"><h1>Profile</h1><p>Perbarui identitas akun dan keamanan password Anda.</p></div>
-        <?php $this->load->view('../../views/layout/flash'); ?>
+        <?php $this->load->view('template/flash'); ?>
         <div class="row g-4 mt-1">
             <div class="col-lg-7"><div class="card glass-card h-100"><div class="card-body"><h5>Informasi Akun</h5>
                 <form method="post" action="<?= site_url('profile/update') ?>"><div class="row g-3">

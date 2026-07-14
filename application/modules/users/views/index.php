@@ -2,7 +2,7 @@
     <div class="page-toolbar mb-3"><a href="<?= site_url('/') ?>" class="back-button"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a><a href="<?= site_url('users/create') ?>" class="back-button"><i class="fa-solid fa-plus"></i><span>Tambah User</span></a></div>
     <section class="menu-shell monitoring-shell">
         <div class="menu-heading"><h1>Users</h1><p>Kelola akun pengguna dan role akses aplikasi.</p></div>
-        <?php $this->load->view('../../views/layout/flash'); ?>
+        <?php $this->load->view('template/flash'); ?>
         <div class="card glass-card shadow-sm mt-3"><div class="card-body table-responsive"><table class="table table-bordered table-striped">
             <thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Login Terakhir</th><th>Action</th></tr></thead><tbody>
             <?php if (empty($users)): ?><tr><td colspan="7" class="text-center text-muted">Belum ada user.</td></tr><?php endif; ?>

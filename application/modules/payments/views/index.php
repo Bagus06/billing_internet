@@ -24,7 +24,7 @@
         </div>
 
         <div class="card glass-card shadow-sm mt-3">
-            <div class="card-body table-responsive">
+            <div class="card-body">
                 <?php
                 $queryBase = $filters;
                 $queryBase['per_page'] = $per_page;
@@ -47,12 +47,18 @@
                     </form>
                 </div>
 
-                <form method="get" action="<?= site_url('payments') ?>" class="customer-table-search">
+                <form method="get" action="<?= site_url('payments') ?>" class="customer-table-search table-responsive">
                     <input type="hidden" name="per_page" value="<?= (int) $per_page ?>">
                     <table class="table table-bordered table-striped table-nowrap">
                         <thead>
                             <tr class="customer-search-row">
-                                <th><input type="text" name="input_date" class="form-control" placeholder="Input" value="<?= html_escape($filters['input_date']) ?>"></th>
+                                <th>
+                                    <div class="table-date-range">
+                                        <input type="date" name="input_date_from" class="form-control" aria-label="Tanggal input dari" title="Tanggal input dari" value="<?= html_escape($filters['input_date_from']) ?>">
+                                        <span>—</span>
+                                        <input type="date" name="input_date_to" class="form-control" aria-label="Tanggal input sampai" title="Tanggal input sampai" value="<?= html_escape($filters['input_date_to']) ?>">
+                                    </div>
+                                </th>
                                 <th><input type="text" name="customer_code" class="form-control" placeholder="ID" value="<?= html_escape($filters['customer_code']) ?>"></th>
                                 <th><input type="text" name="customer_name" class="form-control" placeholder="Nama" value="<?= html_escape($filters['customer_name']) ?>"></th>
                                 <th><input type="text" name="bill_month" class="form-control" placeholder="Bulan" value="<?= html_escape($filters['bill_month']) ?>"></th>
@@ -61,7 +67,13 @@
                                 <th></th>
                                 <th><input type="text" name="group_name" class="form-control" placeholder="Kelompok" value="<?= html_escape($filters['group_name']) ?>"></th>
                                 <th><input type="text" name="payment_type" class="form-control" placeholder="Bayar" value="<?= html_escape($filters['payment_type']) ?>"></th>
-                                <th><input type="text" name="payment_date" class="form-control" placeholder="Tanggal" value="<?= html_escape($filters['payment_date']) ?>"></th>
+                                <th>
+                                    <div class="table-date-range">
+                                        <input type="date" name="payment_date_from" class="form-control" aria-label="Tanggal bayar dari" title="Tanggal bayar dari" value="<?= html_escape($filters['payment_date_from']) ?>">
+                                        <span>—</span>
+                                        <input type="date" name="payment_date_to" class="form-control" aria-label="Tanggal bayar sampai" title="Tanggal bayar sampai" value="<?= html_escape($filters['payment_date_to']) ?>">
+                                    </div>
+                                </th>
                                 <th><input type="text" name="payment_method" class="form-control" placeholder="Metode" value="<?= html_escape($filters['payment_method']) ?>"></th>
                                 <th><input type="text" name="notes" class="form-control" placeholder="Ket." value="<?= html_escape($filters['notes']) ?>"></th>
                                 <th>

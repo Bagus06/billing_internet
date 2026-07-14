@@ -85,19 +85,17 @@ class Payments extends MY_Controller
         redirect('payments');
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
         $data['body_class'] = 'monitoring-page';
-
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view($view, $data);
-        $this->load->view('../../views/layout/footer');
+        parent::render($view, $data);
     }
 
     private function filters()
     {
         $fields = [
-            'input_date',
+            'input_date_from',
+            'input_date_to',
             'customer_code',
             'customer_name',
             'bill_month',
@@ -105,7 +103,8 @@ class Payments extends MY_Controller
             'package_name',
             'group_name',
             'payment_type',
-            'payment_date',
+            'payment_date_from',
+            'payment_date_to',
             'payment_method',
             'notes',
         ];

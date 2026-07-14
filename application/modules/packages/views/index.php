@@ -35,7 +35,7 @@
             <p>Kelola master paket dan harga yang digunakan pada data pelanggan.</p>
         </div>
 
-        <?php $this->load->view('../../views/layout/flash'); ?>
+        <?php $this->load->view('template/flash'); ?>
 
         <div class="card glass-card shadow-sm mt-3">
             <div class="card-body table-responsive">

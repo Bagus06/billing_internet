@@ -42,19 +42,20 @@ class MY_Controller extends CI_Controller
             'name' => $user['name'],
             'username' => $user['username'],
             'email' => $user['email'],
+            'preferred_theme' => isset($user['preferred_theme']) ? $user['preferred_theme'] : ($this->currentUser['preferred_theme'] ?? null),
+            'preferred_language' => isset($user['preferred_language']) ? $user['preferred_language'] : ($this->currentUser['preferred_language'] ?? null),
         ];
         $this->session->set_userdata('auth_user', $authUser);
         $this->currentUser = $authUser;
     }
 
-    protected function render($view, array $data = [], $moduleJsload = null)
+    protected function render($view, array $data = [])
     {
         $data['current_user'] = $this->currentUser;
-
-        $this->load->view('../../views/layout/header', $data);
-        $this->load->view($view, $data);
-        $this->load->view('../../views/layout/footer', [
-            'module_jsload' => $moduleJsload,
+        $data['module_name'] = strtolower(get_class($this));
+        $this->load->view('template/index', [
+            'content_view' => $view,
+            'view_data' => $data,
         ]);
     }
 }
