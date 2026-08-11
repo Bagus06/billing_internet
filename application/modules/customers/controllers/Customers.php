@@ -41,13 +41,15 @@ class Customers extends MY_Controller
 
     public function create()
     {
+        $ontDevices = $this->olt_snmp->devices();
         $this->render('form', [
             'title' => 'Tambah Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => 'create',
             'customer' => $this->blankCustomer(),
             'packages' => $this->package_model->get_all(true),
             'action' => site_url('customers/store'),
-            'ont_devices' => $this->olt_snmp->devices(),
+            'ont_devices' => $ontDevices,
+            'ont_error' => $ontDevices ? '' : $this->olt_snmp->lastError(),
             'ont_pairing' => null,
         ]);
     }
@@ -75,13 +77,15 @@ class Customers extends MY_Controller
             return;
         }
 
+        $ontDevices = $this->olt_snmp->devices();
         $this->render('form', [
             'title' => 'Edit Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => 'edit',
             'customer' => $customer,
             'packages' => $this->package_model->get_all(true),
             'action' => site_url('customers/update/' . $id),
-            'ont_devices' => $this->olt_snmp->devices(),
+            'ont_devices' => $ontDevices,
+            'ont_error' => $ontDevices ? '' : $this->olt_snmp->lastError(),
             'ont_pairing' => $this->customer_model->ont_pairing($id),
         ]);
     }

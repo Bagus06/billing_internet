@@ -101,6 +101,9 @@
                             </option>
                         <?php endforeach; ?>
                     </select>
+                    <?php if (empty($ont_devices) && !empty($ont_error)): ?>
+                        <div class="form-text text-warning"><i class="fa-solid fa-triangle-exclamation"></i> <?= html_escape($ont_error) ?></div>
+                    <?php endif; ?>
                     <div class="form-text">Relasi disimpan menggunakan serial number fisik ONT. Nama ONT hanya ditampilkan sebagai label.</div>
                 </div>
 

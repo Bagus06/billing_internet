@@ -7,27 +7,36 @@ class Olt_snmp
     const ONU_SERIAL_OID = '1.3.6.1.4.1.50224.3.12.2.1.15';
     const ONU_RX_OID = '1.3.6.1.4.1.50224.3.12.3.1.4';
     private static $deviceCache = null;
+    private $lastError = '';
 
     public function devices()
     {
         if (self::$deviceCache !== null) return self::$deviceCache;
-        if (!extension_loaded('snmp')) return [];
+        if (!$this->snmpAvailable()) {
+            $this->lastError = 'Ekstensi PHP SNMP belum aktif pada server hosting.';
+            return [];
+        }
         $cacheSeconds = max(30, min(600, (int) app_setting('olt_cache_seconds', 60)));
         $cacheDirectory = FCPATH . 'storage' . DIRECTORY_SEPARATOR . 'cache';
         if (!is_dir($cacheDirectory)) @mkdir($cacheDirectory, 0750, true);
         $cacheFile = $cacheDirectory . DIRECTORY_SEPARATOR . 'olt_devices.json';
         $cached = $this->readCache($cacheFile);
-        if ($cached && (time() - (int) $cached['created_at']) < $cacheSeconds) {
+        $connection = $this->connection();
+        if (!$connection) {
+            $this->lastError = 'Host atau community SNMP OLT belum dikonfigurasi.';
+            return [];
+        }
+        $cacheKey = $this->cacheKey($connection[0], $connection[1]);
+        if ($cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey)
+            && (time() - (int) $cached['created_at']) < $cacheSeconds) {
             return self::$deviceCache = $cached['devices'];
         }
 
         $lock = @fopen($cacheFile . '.lock', 'c');
         if ($lock && !@flock($lock, LOCK_EX | LOCK_NB)) {
             @fclose($lock);
-            return self::$deviceCache = ($cached ? $cached['devices'] : []);
+            return self::$deviceCache = ($cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey) ? $cached['devices'] : []);
         }
-        $connection = $this->connection();
-        if (!$connection) { if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); } return []; }
         list($peer, $community) = $connection;
         snmp_set_oid_output_format(SNMP_OID_OUTPUT_NUMERIC);
         $names = $this->walk($peer, $community, self::ONU_NAME_OID);
@@ -40,7 +49,9 @@ class Olt_snmp
         }
         foreach ($serials ?: [] as $oid => $value) {
             $index = $this->lastOidPart($oid);
-            if (isset($devices[$index])) $devices[$index]['serial_number'] = strtoupper($this->stringValue($value));
+            if ($index === '') continue;
+            if (!isset($devices[$index])) $devices[$index] = ['ont_index' => $index, 'ont_name' => 'ONT ' . $index, 'serial_number' => '', 'rx' => null];
+            $devices[$index]['serial_number'] = strtoupper($this->stringValue($value));
         }
         foreach ($powers ?: [] as $oid => $value) {
             if (!preg_match('/\.(\d+)\.0\.0$/', $oid, $matches) || !isset($devices[$matches[1]])) continue;
@@ -50,9 +61,16 @@ class Olt_snmp
         foreach ($devices as &$device) $device['status'] = $this->signalStatus($device['rx']);
         unset($device);
         $devices = array_values(array_filter($devices, function ($device) { return $device['serial_number'] !== ''; }));
-        if ($devices) @file_put_contents($cacheFile, json_encode(['created_at' => time(), 'devices' => $devices]), LOCK_EX);
+        if ($devices) @file_put_contents($cacheFile, json_encode(['created_at' => time(), 'cache_key' => $cacheKey, 'devices' => $devices]), LOCK_EX);
         if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); }
-        return self::$deviceCache = ($devices ?: ($cached ? $cached['devices'] : []));
+        if (!$devices && $this->lastError === '') $this->lastError = 'OLT merespons, tetapi serial ONT tidak ditemukan pada OID yang dikonfigurasi.';
+        $validCached = $cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey);
+        return self::$deviceCache = ($devices ?: ($validCached ? $cached['devices'] : []));
+    }
+
+    public function lastError()
+    {
+        return $this->lastError;
     }
 
     private function readCache($path)
@@ -71,7 +89,7 @@ class Olt_snmp
 
     public function opticalByCustomerName()
     {
-        if (!extension_loaded('snmp')) {
+        if (!$this->snmpAvailable()) {
             return [];
         }
 
@@ -145,10 +163,35 @@ class Olt_snmp
         $version = trim((string) app_setting('olt_snmp_version', ''));
         if ($version === '') $version = (string) ($_ENV['OLT_SNMP_VERSION'] ?? '1');
         $version = ltrim(strtolower(trim($version ?: '1')), 'v');
-        if ($version === '2' || $version === '2c') {
-            return @snmp2_real_walk($host, $community, $oid, 3000000, 1);
+        $function = ($version === '2' || $version === '2c') ? 'snmp2_real_walk' : 'snmprealwalk';
+        if (!function_exists($function)) {
+            $this->lastError = 'Fungsi PHP ' . $function . ' tidak tersedia pada server hosting.';
+            return false;
         }
-        return @snmprealwalk($host, $community, $oid, 3000000, 1);
+        foreach ($this->peerCandidates($host) as $peer) {
+            $result = @$function($peer, $community, $oid, 4000000, 1);
+            if (is_array($result) && $result) return $result;
+        }
+        $this->lastError = 'Server hosting tidak menerima respons SNMP dari OLT. Periksa ekstensi PHP SNMP dan izin UDP keluar.';
+        return false;
+    }
+
+    private function peerCandidates($peer)
+    {
+        $candidates = [$peer];
+        if (preg_match('/^([^:]+):(\d+)$/', $peer, $matches)) $candidates[] = 'udp:' . $matches[1] . ':' . $matches[2];
+        return array_values(array_unique($candidates));
+    }
+
+    private function snmpAvailable()
+    {
+        return function_exists('snmprealwalk') || function_exists('snmp2_real_walk');
+    }
+
+    private function cacheKey($peer, $community)
+    {
+        $version = trim((string) app_setting('olt_snmp_version', ($_ENV['OLT_SNMP_VERSION'] ?? '1')));
+        return hash('sha256', strtolower(trim($peer)) . '|' . strtolower($version) . '|' . hash('sha256', (string) $community));
     }
 
     private function peerName($host, $port)
