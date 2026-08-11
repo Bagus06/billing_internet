@@ -30,6 +30,9 @@ class Setting_model extends MY_Model
             'olt_snmp_port' => ['network', '161', 'integer'],
             'olt_snmp_version' => ['network', '1', 'string'],
             'olt_snmp_community' => ['network', '', 'string'],
+            'olt_relay_enabled' => ['network', '0', 'boolean'],
+            'olt_relay_url' => ['network', '', 'string'],
+            'olt_relay_token' => ['network', '', 'string'],
         ];
         foreach ($defaults as $key => $definition) {
             $exists = $this->db->where('setting_key', $key)->count_all_results($this->table) > 0;

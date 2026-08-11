@@ -2,6 +2,8 @@
 $value = function ($key, $default = '') use ($settings) { return isset($settings[$key]) ? $settings[$key] : $default; };
 $oltHost = trim((string) $value('olt_snmp_host', '')) ?: ($_ENV['OLT_SNMP_HOST'] ?? '');
 $oltCommunity = trim((string) $value('olt_snmp_community', '')) ?: ($_ENV['OLT_SNMP_COMMUNITY'] ?? '');
+$oltRelayUrl = trim((string) $value('olt_relay_url', '')) ?: ($_ENV['OLT_RELAY_URL'] ?? '');
+$oltRelayToken = trim((string) $value('olt_relay_token', '')) ?: ($_ENV['OLT_RELAY_TOKEN'] ?? '');
 ?>
 <main class="container py-4 py-md-5">
     <div class="page-toolbar mb-3"><a href="<?= site_url('/') ?>" class="back-button"><i class="fa-solid fa-arrow-left"></i><span>Kembali</span></a></div>
@@ -39,7 +41,12 @@ $oltCommunity = trim((string) $value('olt_snmp_community', '')) ?: ($_ENV['OLT_S
                 <div class="col-md-2"><label class="form-label">Port UDP</label><input type="number" min="1" max="65535" class="form-control" name="olt_snmp_port" value="<?= (int) $value('olt_snmp_port', ($_ENV['OLT_SNMP_PORT'] ?? 161)) ?>"></div>
                 <div class="col-md-2"><label class="form-label">Versi SNMP</label><select class="form-select" name="olt_snmp_version"><option value="1" <?= $value('olt_snmp_version', '1') === '1' ? 'selected' : '' ?>>v1</option><option value="2c" <?= $value('olt_snmp_version', '1') === '2c' ? 'selected' : '' ?>>v2c</option></select></div>
                 <div class="col-md-3"><label class="form-label">Community</label><input type="password" class="form-control" name="olt_snmp_community" value="<?= html_escape($oltCommunity) ?>" autocomplete="new-password"></div>
-                <div class="col-12"><div class="form-text">Konfigurasi ini hanya digunakan oleh ISP aktif. Tenant baru tidak pernah mewarisi host atau community BATARA.</div></div>
+                <div class="col-12"><div class="form-text">SNMP langsung digunakan sebagai fallback ketika relay Debian tidak aktif atau gagal.</div></div>
+                <div class="col-12"><hr class="my-1"></div>
+                <div class="col-12"><div class="form-check form-switch"><input type="checkbox" class="form-check-input" id="oltRelayEnabled" name="olt_relay_enabled" value="1" <?= in_array(strtolower((string) $value('olt_relay_enabled', '0')), ['1','true','yes','on'], true) ? 'checked' : '' ?>><label class="form-check-label" for="oltRelayEnabled">Gunakan relay OLT Debian melalui TCP</label></div></div>
+                <div class="col-md-8"><label class="form-label">URL Relay</label><input type="url" class="form-control" name="olt_relay_url" value="<?= html_escape($oltRelayUrl) ?>" placeholder="http://103.85.52.33:31877"></div>
+                <div class="col-md-4"><label class="form-label">Token Relay</label><input type="password" class="form-control" name="olt_relay_token" value="<?= html_escape($oltRelayToken) ?>" autocomplete="new-password"></div>
+                <div class="col-12"><div class="form-text">Token digunakan untuk tanda tangan HMAC bertimestamp dan tidak dikirim langsung pada request.</div></div>
             </div></div></div>
             <div class="card glass-card mb-3"><div class="card-header glass-header"><i class="fa-solid fa-user-lock me-2"></i>Sistem Isolir</div><div class="card-body"><div class="row g-3">
                 <div class="col-12"><div class="form-check form-switch"><input type="checkbox" class="form-check-input" id="isolationEnabled" name="isolation_enabled" value="1" <?= in_array(strtolower((string) $value('isolation_enabled', '0')), ['1','true','yes','on'], true) ? 'checked' : '' ?>><label class="form-check-label" for="isolationEnabled">Aktifkan isolir otomatis melalui cron</label></div><div class="form-text">Aktifkan setelah profile ISOLIR tersedia di seluruh router yang digunakan pelanggan.</div></div>

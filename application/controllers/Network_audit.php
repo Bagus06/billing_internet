@@ -3,6 +3,15 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 class Network_audit extends CI_Controller
 {
+    public function olt_devices()
+    {
+        if (!$this->input->is_cli_request()) { show_404(); return; }
+        $this->load->library('Olt_snmp');
+        $devices = $this->olt_snmp->devices();
+        echo json_encode(['success' => (bool) $devices, 'device_count' => count($devices),
+            'error' => $devices ? null : $this->olt_snmp->lastError()], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    }
+
     public function remote_ont($nik = '')
     {
         if (!$this->input->is_cli_request()) { show_404(); return; }
@@ -690,6 +699,61 @@ class Network_audit extends CI_Controller
                 }
                 if (!$this->done($response)) throw new RuntimeException('MikroTik menolak NAT WireGuard Debian.');
                 return ['success' => true, 'endpoint' => '103.85.52.33:51888', 'target' => '10.5.5.3:51888/udp'];
+            });
+            echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+        } catch (Throwable $e) { echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_PRETTY_PRINT); }
+    }
+
+    public function configure_olt_relay_external($nik = '')
+    {
+        if (!$this->input->is_cli_request()) { show_404(); return; }
+        if (preg_match('/^router-(\d+)$/', (string) $nik, $matches)) {
+            $this->load->model('routers/router_model');
+            $this->load->library('Mikrotik_query');
+            $router = $this->router_model->find((int) $matches[1]);
+            $context = $router ? ['router' => $router] : ['error' => 'Router tidak ditemukan.'];
+        } else {
+            $context = $this->context($nik);
+        }
+        if (isset($context['error'])) { echo json_encode($context, JSON_PRETTY_PRINT); return; }
+        try {
+            $result = $this->mikrotik_query->run($context['router'], function ($api) {
+                $publicIp = '103.85.52.33'; $publicPort = '31877'; $serverIp = '10.5.5.3'; $serverPort = '8787';
+                $natComment = 'Billing Internet - OLT Relay TCP';
+                $srcnatComment = 'Billing Internet - OLT Relay return path';
+                $filterComment = 'Billing Internet - allow OLT Relay TCP';
+                $nat = $this->clean($api->comm('/ip/firewall/nat/print'));
+                foreach ($nat as $row) {
+                    if (($row['chain'] ?? '') !== 'dstnat' || ($row['protocol'] ?? '') !== 'tcp' || ($row['disabled'] ?? 'false') === 'true') continue;
+                    if ((string) ($row['dst-port'] ?? '') === $publicPort && ($row['comment'] ?? '') !== $natComment) {
+                        throw new RuntimeException('TCP publik ' . $publicPort . ' sudah digunakan rule ' . ($row['comment'] ?? ($row['.id'] ?? 'tanpa nama')) . '.');
+                    }
+                }
+                $existing = $this->findBy($nat, 'comment', $natComment);
+                $params = ['=chain' => 'dstnat', '=dst-address' => $publicIp, '=protocol' => 'tcp', '=dst-port' => $publicPort,
+                    '=action' => 'dst-nat', '=to-addresses' => $serverIp, '=to-ports' => $serverPort, '=comment' => $natComment, '=disabled' => 'no'];
+                if ($existing && !empty($existing['.id'])) { $params['=.id'] = $existing['.id']; $response = $api->comm('/ip/firewall/nat/set', $params); }
+                else $response = $api->comm('/ip/firewall/nat/add', $params);
+                if (!$this->done($response)) throw new RuntimeException('MikroTik menolak DST-NAT relay OLT.');
+
+                $nat = $this->clean($api->comm('/ip/firewall/nat/print'));
+                $srcnat = $this->findBy($nat, 'comment', $srcnatComment);
+                $srcnatParams = ['=chain' => 'srcnat', '=action' => 'src-nat', '=protocol' => 'tcp',
+                    '=dst-address' => $serverIp, '=dst-port' => $serverPort, '=to-addresses' => '10.5.5.2',
+                    '=comment' => $srcnatComment, '=disabled' => 'no'];
+                if ($srcnat && !empty($srcnat['.id'])) { $srcnatParams['=.id'] = $srcnat['.id']; $response = $api->comm('/ip/firewall/nat/set', $srcnatParams); }
+                else $response = $api->comm('/ip/firewall/nat/add', $srcnatParams);
+                if (!$this->done($response)) throw new RuntimeException('MikroTik menolak source NAT jalur balik relay OLT.');
+
+                $filters = $this->clean($api->comm('/ip/firewall/filter/print'));
+                $filter = $this->findBy($filters, 'comment', $filterComment);
+                $filterParams = ['=chain' => 'forward', '=action' => 'accept', '=protocol' => 'tcp', '=dst-address' => $serverIp,
+                    '=dst-port' => $serverPort, '=connection-nat-state' => 'dstnat', '=comment' => $filterComment, '=disabled' => 'no'];
+                if ($filter && !empty($filter['.id'])) { $filterParams['=.id'] = $filter['.id']; $response = $api->comm('/ip/firewall/filter/set', $filterParams); }
+                else $response = $api->comm('/ip/firewall/filter/add', $filterParams);
+                if (!$this->done($response)) throw new RuntimeException('MikroTik menolak firewall allow relay OLT.');
+                return ['success' => true, 'endpoint' => 'http://' . $publicIp . ':' . $publicPort,
+                    'target' => $serverIp . ':' . $serverPort . '/tcp'];
             });
             echo json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
         } catch (Throwable $e) { echo json_encode(['success' => false, 'error' => $e->getMessage()], JSON_PRETTY_PRINT); }

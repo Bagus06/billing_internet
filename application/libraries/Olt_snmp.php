@@ -12,21 +12,20 @@ class Olt_snmp
     public function devices()
     {
         if (self::$deviceCache !== null) return self::$deviceCache;
-        if (!$this->snmpAvailable()) {
-            $this->lastError = 'Ekstensi PHP SNMP belum aktif pada server hosting.';
-            return [];
-        }
         $cacheSeconds = max(30, min(600, (int) app_setting('olt_cache_seconds', 60)));
         $cacheDirectory = FCPATH . 'storage' . DIRECTORY_SEPARATOR . 'cache';
         if (!is_dir($cacheDirectory)) @mkdir($cacheDirectory, 0750, true);
         $cacheFile = $cacheDirectory . DIRECTORY_SEPARATOR . 'olt_devices.json';
         $cached = $this->readCache($cacheFile);
+        $relay = $this->relayConnection();
         $connection = $this->connection();
-        if (!$connection) {
-            $this->lastError = 'Host atau community SNMP OLT belum dikonfigurasi.';
+        if (!$relay && !$connection) {
+            $this->lastError = 'Relay atau koneksi SNMP OLT belum dikonfigurasi.';
             return [];
         }
-        $cacheKey = $this->cacheKey($connection[0], $connection[1]);
+        $cacheKey = $relay
+            ? hash('sha256', 'relay|' . $relay['url'] . '|' . hash('sha256', $relay['token']))
+            : $this->cacheKey($connection[0], $connection[1]);
         if ($cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey)
             && (time() - (int) $cached['created_at']) < $cacheSeconds) {
             return self::$deviceCache = $cached['devices'];
@@ -37,6 +36,22 @@ class Olt_snmp
             @fclose($lock);
             return self::$deviceCache = ($cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey) ? $cached['devices'] : []);
         }
+        $devices = $relay ? $this->relayDevices($relay) : [];
+        if (!$devices && $connection && $this->snmpAvailable()) $devices = $this->directDevices($connection);
+        if ($devices) @file_put_contents($cacheFile, json_encode(['created_at' => time(), 'cache_key' => $cacheKey, 'devices' => $devices]), LOCK_EX);
+        if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); }
+        if (!$devices && $this->lastError === '') $this->lastError = 'OLT merespons, tetapi serial ONT tidak ditemukan pada OID yang dikonfigurasi.';
+        $validCached = $cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey);
+        return self::$deviceCache = ($devices ?: ($validCached ? $cached['devices'] : []));
+    }
+
+    public function lastError()
+    {
+        return $this->lastError;
+    }
+
+    private function directDevices(array $connection)
+    {
         list($peer, $community) = $connection;
         snmp_set_oid_output_format(SNMP_OID_OUTPUT_NUMERIC);
         $names = $this->walk($peer, $community, self::ONU_NAME_OID);
@@ -58,19 +73,52 @@ class Olt_snmp
             $raw = $this->integerValue($value);
             $devices[$matches[1]]['rx'] = $raw <= -4000 ? null : round($raw / 100, 2);
         }
-        foreach ($devices as &$device) $device['status'] = $this->signalStatus($device['rx']);
-        unset($device);
-        $devices = array_values(array_filter($devices, function ($device) { return $device['serial_number'] !== ''; }));
-        if ($devices) @file_put_contents($cacheFile, json_encode(['created_at' => time(), 'cache_key' => $cacheKey, 'devices' => $devices]), LOCK_EX);
-        if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); }
-        if (!$devices && $this->lastError === '') $this->lastError = 'OLT merespons, tetapi serial ONT tidak ditemukan pada OID yang dikonfigurasi.';
-        $validCached = $cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey);
-        return self::$deviceCache = ($devices ?: ($validCached ? $cached['devices'] : []));
+        return $this->normalizeDevices($devices);
     }
 
-    public function lastError()
+    private function relayDevices(array $relay)
     {
-        return $this->lastError;
+        $path = '/api/v1/olt/devices';
+        $timestamp = (string) time();
+        $signature = hash_hmac('sha256', $timestamp . "\n" . $path, $relay['token']);
+        $headers = ['Accept: application/json', 'X-Relay-Timestamp: ' . $timestamp, 'X-Relay-Signature: ' . $signature];
+        $body = false;
+        if (function_exists('curl_init')) {
+            $handle = curl_init($relay['url'] . $path);
+            curl_setopt_array($handle, [CURLOPT_RETURNTRANSFER => true, CURLOPT_CONNECTTIMEOUT => 4, CURLOPT_TIMEOUT => 12, CURLOPT_HTTPHEADER => $headers]);
+            $body = curl_exec($handle);
+            $status = (int) curl_getinfo($handle, CURLINFO_HTTP_CODE);
+            curl_close($handle);
+            if ($status !== 200) $body = false;
+        } else {
+            $context = stream_context_create(['http' => ['method' => 'GET', 'timeout' => 12, 'ignore_errors' => true, 'header' => implode("\r\n", $headers)]]);
+            $body = @file_get_contents($relay['url'] . $path, false, $context);
+        }
+        $payload = is_string($body) ? json_decode($body, true) : null;
+        if (!is_array($payload) || empty($payload['success']) || !isset($payload['devices']) || !is_array($payload['devices'])) {
+            $this->lastError = 'Relay OLT Debian tidak dapat dihubungi melalui TCP atau menolak autentikasi.';
+            return [];
+        }
+        return $this->normalizeDevices($payload['devices']);
+    }
+
+    private function normalizeDevices(array $devices)
+    {
+        $result = [];
+        foreach ($devices as $key => $device) {
+            if (!is_array($device)) continue;
+            $serial = strtoupper(trim((string) ($device['serial_number'] ?? '')));
+            if ($serial === '') continue;
+            $rx = isset($device['rx']) && is_numeric($device['rx']) ? round((float) $device['rx'], 2) : null;
+            $result[] = [
+                'ont_index' => (string) ($device['ont_index'] ?? $key),
+                'ont_name' => trim((string) ($device['ont_name'] ?? '')) ?: 'ONT ' . (string) ($device['ont_index'] ?? $key),
+                'serial_number' => $serial,
+                'rx' => $rx,
+                'status' => $this->signalStatus($rx),
+            ];
+        }
+        return $result;
     }
 
     private function readCache($path)
@@ -150,6 +198,18 @@ class Olt_snmp
         $community = trim((string) app_setting('olt_snmp_community', ''));
         if ($community === '') $community = (string) ($_ENV['OLT_SNMP_COMMUNITY'] ?? '');
         return ($host !== '' && $community !== '' && $port > 0 && $port <= 65535) ? [$this->peerName($host, $port), $community] : null;
+    }
+
+    private function relayConnection()
+    {
+        $enabled = (string) app_setting('olt_relay_enabled', ($_ENV['OLT_RELAY_ENABLED'] ?? '0'));
+        if (!in_array(strtolower(trim($enabled)), ['1', 'true', 'yes', 'on'], true)) return null;
+        $url = trim((string) app_setting('olt_relay_url', ''));
+        if ($url === '') $url = trim((string) ($_ENV['OLT_RELAY_URL'] ?? ''));
+        $token = trim((string) app_setting('olt_relay_token', ''));
+        if ($token === '') $token = trim((string) ($_ENV['OLT_RELAY_TOKEN'] ?? ''));
+        if ($url === '' || $token === '' || !preg_match('#^https?://#i', $url)) return null;
+        return ['url' => rtrim($url, '/'), 'token' => $token];
     }
 
     public function normalizeName($name)

@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import json
+import hashlib
+import hmac
 import os
 import re
 import subprocess
@@ -36,6 +38,61 @@ def snmp_get(oids):
     return values, False
 
 
+def snmp_walk(oid):
+    key = ("walk", oid)
+    cached = CACHE.get(key)
+    if cached and time.time() - cached[0] < CACHE_TTL:
+        return cached[1], True
+    command = ["/usr/bin/snmpwalk", "-On", "-v1", "-c", COMMUNITY, "-t", "3", "-r", "1", OLT_HOST, oid]
+    result = subprocess.run(command, capture_output=True, text=True, timeout=8, check=False)
+    if result.returncode != 0:
+        raise RuntimeError((result.stderr or result.stdout or "SNMP walk failed").strip())
+    values = {}
+    for line in result.stdout.splitlines():
+        match = re.match(r"\.?(\d+(?:\.\d+)*)\s+=\s+([^:]+):\s*(.*)$", line.strip())
+        if match:
+            values[match.group(1)] = match.group(3).strip().strip('"')
+    CACHE[key] = (time.time(), values)
+    return values, False
+
+
+def last_oid_part(oid):
+    return oid.rsplit(".", 1)[-1]
+
+
+def integer_value(value):
+    match = re.search(r"-?\d+", str(value))
+    return int(match.group(0)) if match else -4000
+
+
+def olt_devices():
+    names, names_cached = snmp_walk("1.3.6.1.4.1.50224.3.12.2.1.2")
+    serials, serials_cached = snmp_walk("1.3.6.1.4.1.50224.3.12.2.1.15")
+    powers, powers_cached = snmp_walk("1.3.6.1.4.1.50224.3.12.3.1.4")
+    devices = {}
+    for oid, value in names.items():
+        index = last_oid_part(oid)
+        devices[index] = {"ont_index": index, "ont_name": value, "serial_number": "", "rx": None}
+    for oid, value in serials.items():
+        index = last_oid_part(oid)
+        devices.setdefault(index, {"ont_index": index, "ont_name": "ONT " + index, "serial_number": "", "rx": None})
+        devices[index]["serial_number"] = value.upper()
+    for oid, value in powers.items():
+        match = re.search(r"\.(\d+)\.0\.0$", oid)
+        if not match or match.group(1) not in devices:
+            continue
+        raw = integer_value(value)
+        devices[match.group(1)]["rx"] = None if raw <= -4000 else round(raw / 100.0, 2)
+    result = []
+    for device in devices.values():
+        if not device["serial_number"]:
+            continue
+        rx = device["rx"]
+        device["status"] = "offline" if rx is None else ("normal" if rx >= -25 else ("warning" if rx >= -28 else "critical"))
+        result.append(device)
+    return result, names_cached and serials_cached and powers_cached
+
+
 class Handler(BaseHTTPRequestHandler):
     server_version = "BataraOLTRelay/1.0"
 
@@ -53,7 +110,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def authorized(self):
-        return TOKEN and self.headers.get("Authorization", "") == "Bearer " + TOKEN
+        timestamp = self.headers.get("X-Relay-Timestamp", "")
+        signature = self.headers.get("X-Relay-Signature", "")
+        if timestamp.isdigit() and abs(int(time.time()) - int(timestamp)) <= 60:
+            message = timestamp + "\n" + self.path
+            expected = hmac.new(TOKEN.encode("utf-8"), message.encode("utf-8"), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(signature, expected):
+                return True
+        return False
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -66,6 +130,10 @@ class Handler(BaseHTTPRequestHandler):
         try:
             if parsed.path == "/api/v1/olt/system":
                 oids = ["1.3.6.1.2.1.1.1.0", "1.3.6.1.2.1.1.2.0", "1.3.6.1.2.1.1.3.0", "1.3.6.1.2.1.1.5.0"]
+            elif parsed.path == "/api/v1/olt/devices":
+                devices, cached = olt_devices()
+                self.send_json(200, {"success": True, "olt": OLT_HOST, "cached": cached, "collected_at": int(time.time()), "devices": devices})
+                return
             elif parsed.path == "/api/v1/snmp/get":
                 oids = parse_qs(parsed.query).get("oid", [])
                 if not oids or len(oids) > 20:
