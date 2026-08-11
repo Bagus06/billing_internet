@@ -124,6 +124,10 @@ class Handler(BaseHTTPRequestHandler):
         if parsed.path == "/healthz":
             self.send_json(200, {"success": True, "service": "olt-relay"})
             return
+        allowed_paths = ("/api/v1/olt/system", "/api/v1/olt/devices", "/api/v1/snmp/get")
+        if parsed.path not in allowed_paths:
+            self.send_json(404, {"success": False, "error": "Not found"})
+            return
         if not self.authorized():
             self.send_json(401, {"success": False, "error": "Unauthorized"})
             return
@@ -142,9 +146,6 @@ class Handler(BaseHTTPRequestHandler):
                 if any(not OID_PATTERN.fullmatch(oid) or not oid.startswith(ALLOWED_OIDS) for oid in oids):
                     self.send_json(400, {"success": False, "error": "OID is outside the allowlist"})
                     return
-            else:
-                self.send_json(404, {"success": False, "error": "Not found"})
-                return
             values, cached = snmp_get(oids)
             self.send_json(200, {"success": True, "olt": OLT_HOST, "cached": cached, "collected_at": int(time.time()), "data": values})
         except subprocess.TimeoutExpired:

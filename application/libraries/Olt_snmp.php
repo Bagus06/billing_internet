@@ -37,10 +37,18 @@ class Olt_snmp
             return self::$deviceCache = ($cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey) ? $cached['devices'] : []);
         }
         $devices = $relay ? $this->relayDevices($relay) : [];
-        if (!$devices && $connection && $this->snmpAvailable()) $devices = $this->directDevices($connection);
+        $relayError = $relay && !$devices ? $this->lastError : '';
+        if (!$devices && $connection && $this->snmpAvailable()) {
+            $devices = $this->directDevices($connection);
+            if (!$devices && $relayError !== '') $this->lastError = $relayError . ' Fallback SNMP langsung juga gagal.';
+        }
         if ($devices) @file_put_contents($cacheFile, json_encode(['created_at' => time(), 'cache_key' => $cacheKey, 'devices' => $devices]), LOCK_EX);
         if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); }
-        if (!$devices && $this->lastError === '') $this->lastError = 'OLT merespons, tetapi serial ONT tidak ditemukan pada OID yang dikonfigurasi.';
+        if (!$devices && $this->lastError === '') {
+            $this->lastError = $relay
+                ? 'Relay OLT aktif tetapi tidak mengembalikan perangkat. Periksa URL dan token relay.'
+                : 'OLT merespons, tetapi serial ONT tidak ditemukan pada OID yang dikonfigurasi.';
+        }
         $validCached = $cached && isset($cached['cache_key']) && hash_equals((string) $cached['cache_key'], $cacheKey);
         return self::$deviceCache = ($devices ?: ($validCached ? $cached['devices'] : []));
     }
