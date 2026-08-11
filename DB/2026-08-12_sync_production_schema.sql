@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS customer_address_coordinate_backup_20260717 (
 INSERT INTO customer_address_coordinate_backup_20260717 (customer_id, address, backed_up_at)
 SELECT id, address, NOW() FROM customers
 WHERE address IS NOT NULL AND TRIM(address) <> ''
-  AND REGEXP_LIKE(TRIM(address), '^-?[0-9]+([.][0-9]+)?[[:space:]]*,[[:space:]]*-?[0-9]+([.][0-9]+)?$')
+  AND TRIM(address) REGEXP '^-?[0-9]+([.][0-9]+)?[[:space:]]*,[[:space:]]*-?[0-9]+([.][0-9]+)?$'
 ON DUPLICATE KEY UPDATE address = VALUES(address);
 
 UPDATE customers
@@ -43,7 +43,7 @@ SET latitude = CAST(TRIM(SUBSTRING_INDEX(address, ',', 1)) AS DECIMAL(10,7)),
     longitude = CAST(TRIM(SUBSTRING_INDEX(address, ',', -1)) AS DECIMAL(10,7)),
     updated_at = NOW()
 WHERE address IS NOT NULL AND TRIM(address) <> ''
-  AND REGEXP_LIKE(TRIM(address), '^-?[0-9]+([.][0-9]+)?[[:space:]]*,[[:space:]]*-?[0-9]+([.][0-9]+)?$');
+  AND TRIM(address) REGEXP '^-?[0-9]+([.][0-9]+)?[[:space:]]*,[[:space:]]*-?[0-9]+([.][0-9]+)?$';
 
 CREATE TABLE IF NOT EXISTS customer_isolation_logs (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
