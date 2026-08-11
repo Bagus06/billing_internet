@@ -8,11 +8,11 @@
 
     <section class="menu-shell monitoring-shell">
         <div class="brand-bar">
-            <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo">
+            <img src="<?= base_url(app_setting('logo_path', 'assets/img/default-isp-logo.svg')) ?>" alt="<?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>" class="brand-logo">
             <div>
                 <div class="menu-eyebrow">
                     <i class="fa-solid fa-money-bill-wave me-2"></i>
-                    ISP BATARA NET
+                    <?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>
                 </div>
                 <div class="brand-subtitle">Data Pembayaran</div>
             </div>
@@ -78,12 +78,13 @@
                                 <th><input type="text" name="notes" class="form-control" placeholder="Ket." value="<?= html_escape($filters['notes']) ?>"></th>
                                 <th>
                                     <div class="customer-search-actions">
-                                        <button type="submit" class="monitoring-action border-0">
+                                        <button type="submit" class="filter-submit-button">
                                             <i class="fa-solid fa-magnifying-glass"></i>
                                             Search
                                         </button>
-                                        <a href="<?= site_url('payments') ?>" class="monitoring-action text-decoration-none d-inline-flex align-items-center">
-                                            Reset
+                                        <a href="<?= site_url('payments') ?>" class="filter-reset-button">
+                                            <i class="fa-solid fa-rotate-left"></i>
+                                            <span>Reset</span>
                                         </a>
                                     </div>
                                 </th>
@@ -126,7 +127,7 @@
                                     <td><?= html_escape($payment['payment_method']) ?></td>
                                     <td><?= html_escape($payment['notes']) ?></td>
                                     <td>
-                                        <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('payments/delete/' . $payment['id']) ?>" data-confirm="Hapus pembayaran ini?">Delete</a>
+                                        <a class="table-action-button is-delete" href="<?= site_url('payments/delete/' . $payment['id']) ?>" data-confirm="Hapus pembayaran ini?"><i class="fa-solid fa-trash-can"></i><span>Hapus</span></a>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

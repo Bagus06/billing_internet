@@ -2,8 +2,10 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 date_default_timezone_set('Asia/Jakarta');
 
-$root = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . $_SERVER['HTTP_HOST'];
-$root .= str_replace(basename($_SERVER['SCRIPT_NAME']), '', $_SERVER['SCRIPT_NAME']);
+$host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'localhost';
+$scriptName = isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '/index.php';
+$root = (isset($_SERVER['HTTPS']) ? "https://" : "http://") . $host;
+$root .= str_replace(basename($scriptName), '', $scriptName);
 $config['base_url'] = $root;
 
 $config['index_page'] = '';
@@ -39,8 +41,9 @@ $config['sess_regenerate_destroy'] = false;
 $config['cookie_prefix'] = '';
 $config['cookie_domain'] = '';
 $config['cookie_path'] = '/';
-$config['cookie_secure'] = false;
-$config['cookie_httponly'] = false;
+$config['cookie_secure'] = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off');
+$config['cookie_httponly'] = true;
+$config['cookie_samesite'] = 'Lax';
 $config['standardize_newlines'] = false;
 $config['global_xss_filtering'] = false;
 $config['csrf_protection'] = false;

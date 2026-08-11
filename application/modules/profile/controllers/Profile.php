@@ -13,7 +13,7 @@ class Profile extends MY_Controller
 
     public function index()
     {
-        $this->render('index', ['title' => 'Profile - ISP BATARA NET', 'user' => $this->user_model->find_with_role($this->currentUser['id'])]);
+        $this->render('index', ['title' => 'Profile - ' . app_setting('isp_name', 'ISP Billing'), 'user' => $this->user_model->find_with_role($this->currentUser['id'])]);
     }
 
     public function update()

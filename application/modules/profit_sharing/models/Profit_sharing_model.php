@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Profit_sharing_model extends CI_Model
+class Profit_sharing_model extends MY_Model
 {
     private $table = 'profit_sharing_settings';
 
@@ -14,28 +14,7 @@ class Profit_sharing_model extends CI_Model
     private function ensure_table()
     {
         if ($this->db->table_exists($this->table)) return;
-
-        $sql = "CREATE TABLE IF NOT EXISTS `profit_sharing_settings` (
-            `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
-            `effective_month` DATE NOT NULL,
-            `party_1_name` VARCHAR(150) NOT NULL,
-            `party_1_percent` DECIMAL(5,2) NOT NULL DEFAULT 75.00,
-            `party_2_name` VARCHAR(150) NOT NULL,
-            `party_2_percent` DECIMAL(5,2) NOT NULL DEFAULT 14.00,
-            `created_at` DATETIME NOT NULL,
-            `updated_at` DATETIME NOT NULL,
-            PRIMARY KEY (`id`), UNIQUE KEY `uq_profit_sharing_effective_month` (`effective_month`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4";
-        if (!$this->db->query($sql)) return;
-
-        $this->db->insert($this->table, [
-            'effective_month' => date('Y-01-01'),
-            'party_1_name' => app_setting('profit_party_1_name', 'Pihak Pertama'),
-            'party_1_percent' => (float) app_setting('profit_party_1_percent', 75),
-            'party_2_name' => app_setting('profit_party_2_name', 'Pihak Kedua'),
-            'party_2_percent' => (float) app_setting('profit_party_2_percent', 14),
-            'created_at' => date('Y-m-d H:i:s'), 'updated_at' => date('Y-m-d H:i:s'),
-        ]);
+        log_message('error', 'Tabel profit_sharing_settings belum tersedia. Jalankan migration database.');
     }
 
     public function all()

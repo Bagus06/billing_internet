@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Package_model extends CI_Model
+class Package_model extends MY_Model
 {
     private $table = 'internet_packages';
 
@@ -58,5 +58,12 @@ class Package_model extends CI_Model
         return $this->db
             ->where('id', (int) $id)
             ->delete($this->table);
+    }
+
+    public function count_by_router($routerId)
+    {
+        return (int) $this->db
+            ->where('router_id', (int) $routerId)
+            ->count_all_results($this->table);
     }
 }

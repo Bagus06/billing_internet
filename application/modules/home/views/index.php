@@ -17,7 +17,8 @@ $groups=[
  ['id'=>'admin','title'=>'Administrasi','subtitle'=>'Pengguna dan konfigurasi','icon'=>'fa-shield-halved','color'=>'orange','items'=>array_values(array_filter([
   $can('users')?['Pengguna','Akun operator aplikasi','users','fa-user-gear']:null,
   $can('roles')?['Role & Akses','Hak akses pengguna','roles','fa-shield-halved']:null,
-  $can('settings')?['Konfigurasi','Identitas & parameter sistem','settings','fa-gears']:null]))],
+  $can('settings')?['Konfigurasi','Identitas & parameter sistem','settings','fa-gears']:null,
+]))],
  ['id'=>'account','title'=>'Akun','subtitle'=>'Profile akun pengguna','icon'=>'fa-circle-user','color'=>'green','items'=>array_values(array_filter([
   $can('profile')?['Profile','Kelola profile akun','profile','fa-circle-user']:null]))],
 ];

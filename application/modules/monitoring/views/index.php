@@ -15,6 +15,7 @@
         data-sessions-url="<?= site_url('monitoring/sessions' . (!empty($router) ? '/' . $router['id'] : '')) ?>"
         data-disconnect-url="<?= site_url('monitoring/disconnect') ?>"
         data-connect-url="<?= site_url('monitoring/connect') ?>"
+        data-remote-ont-url="<?= site_url('monitoring/remote-ont') ?>"
         data-traffic-url="<?= site_url('monitoring/traffic' . (!empty($router) ? '/' . $router['id'] : '')) ?>"
         data-refresh-seconds="<?= (int) app_setting('monitoring_refresh_seconds', 30) ?>"
         data-traffic-seconds="<?= (int) app_setting('traffic_refresh_seconds', 3) ?>"
@@ -32,7 +33,7 @@
 
         <div class="menu-heading">
             <h1><?= !empty($router) ? html_escape($router['name']) : 'Monitoring Mikrotik' ?></h1>
-            <p>Status pelanggan PPPoE dengan username <strong>@BATARA.net</strong>, terhubung ke data pelanggan berdasarkan NIK.</p>
+            <p>Status pelanggan PPPoE dengan suffix username <strong><?= html_escape(app_setting('pppoe_username_suffix', '@BATARA.net')) ?></strong>, terhubung ke data pelanggan berdasarkan NIK.</p>
         </div>
 
         <div class="row g-3 mt-2">

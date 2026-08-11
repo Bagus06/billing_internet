@@ -17,7 +17,7 @@ class Auth extends CI_Controller
         }
 
         $data = [
-            'title' => 'Login - ISP BATARA NET',
+            'title' => 'Login - ' . app_setting('isp_name', 'ISP BATARA NET'),
             'body_class' => 'auth-page',
             'hide_navigation' => true,
             'module_name' => 'auth',
@@ -31,6 +31,7 @@ class Auth extends CI_Controller
 
     public function attempt()
     {
+        if (!$this->request_guard->enforce()) return;
         $username = trim($this->input->post('username', true));
         $password = (string) $this->input->post('password');
         $user = $this->auth_model->find_by_username($username);
@@ -61,12 +62,18 @@ class Auth extends CI_Controller
         $intended = $this->session->userdata('intended_url');
         $this->session->unset_userdata('intended_url');
 
-        redirect($intended ?: '/');
+        redirect($this->safeIntendedUrl($intended));
     }
 
     public function logout()
     {
         $this->session->sess_destroy();
         redirect('login');
+    }
+
+    private function safeIntendedUrl($intended)
+    {
+        $intended = trim((string) $intended);
+        return $intended !== '' && strpos($intended, base_url()) === 0 ? $intended : '/';
     }
 }

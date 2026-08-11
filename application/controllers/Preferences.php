@@ -6,6 +6,7 @@ class Preferences extends CI_Controller
     public function theme()
     {
         if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        if (!$this->request_guard->enforce()) return;
         $theme = trim((string) $this->input->post('theme', true));
         if (!in_array($theme, ['light', 'dark'], true)) { $this->json(false, 'Tema tidak valid.'); return; }
 

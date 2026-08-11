@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Financial_report_model extends CI_Model
+class Financial_report_model extends MY_Model
 {
     private $table = 'customer_payments';
 

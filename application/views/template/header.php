@@ -2,7 +2,7 @@
 defined('BASEPATH') or exit('No direct script access allowed');
 $authUser = $this->session->userdata('auth_user');
 $authPermissions = $this->session->userdata('auth_permissions') ?: [];
-$hasAccess = function ($key) use ($authPermissions) { return in_array($key, $authPermissions, true); };
+$hasAccess = function ($key) use ($authPermissions) { return in_array($key,$authPermissions,true); };
 $activeMenu = (string) $this->uri->segment(1);
 ?>
 <header class="app-topbar">

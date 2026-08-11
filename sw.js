@@ -1,11 +1,12 @@
-const CACHE_NAME = 'batara-billing-static-v2';
+const CACHE_NAME = 'batara-billing-static-v3';
 const STATIC_ASSETS = [
   './offline.html',
   './assets/css/style.css',
   './assets/js/app.js',
   './assets/js/i18n.js',
-  './assets/icons/favicon.svg',
-  './assets/icons/app-icon.svg'
+  './assets/img/logo.jpeg',
+  './pwa/icon/192',
+  './pwa/icon/512'
 ];
 
 self.addEventListener('install', event => {

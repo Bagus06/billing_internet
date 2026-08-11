@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Role_model extends CI_Model
+class Role_model extends MY_Model
 {
     private $table = 'roles';
 
@@ -86,6 +86,13 @@ class Role_model extends CI_Model
     public function has_users($id)
     {
         return $this->db->where('role_id', (int) $id)->count_all_results('users') > 0;
+    }
+
+    public function name_exists($name, $ignoreId = null)
+    {
+        $this->db->where('name', trim((string) $name));
+        if ($ignoreId !== null) $this->db->where('id !=', (int) $ignoreId);
+        return $this->db->count_all_results($this->table) > 0;
     }
 
     private function sync_permissions($roleId, array $permissions)

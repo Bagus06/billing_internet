@@ -14,11 +14,13 @@
             <h1>Masuk</h1>
 
             <?php if (!empty($error)): ?><div class="app-flash-message" data-type="error" data-message="<?= html_escape($error) ?>" hidden></div><?php endif; ?>
+            <?php if (!empty($success)): ?><div class="app-flash-message" data-type="success" data-message="<?= html_escape($success) ?>" hidden></div><?php endif; ?>
 
             <form method="post" action="<?= site_url('login/attempt') ?>">
                 <div class="mb-3">
                     <label class="form-label">Username</label>
-                    <input type="text" name="username" class="form-control" required autofocus>
+                    <input type="text" name="username" class="form-control" required autofocus autocomplete="username">
+                    <div class="form-text">Masukkan username akun aplikasi Anda.</div>
                 </div>
 
                 <div class="mb-3">

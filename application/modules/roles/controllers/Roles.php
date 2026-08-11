@@ -13,7 +13,7 @@ class Roles extends MY_Controller
 
     public function index()
     {
-        $this->render('index', ['title' => 'Roles - ISP BATARA NET', 'roles' => $this->role_model->get_all()]);
+        $this->render('index', ['title' => 'Roles - ' . app_setting('isp_name', 'ISP Billing'), 'roles' => $this->role_model->get_all()]);
     }
 
     public function create()
@@ -39,7 +39,7 @@ class Roles extends MY_Controller
     public function update($id)
     {
         if (!$this->role_model->find($id)) { show_404(); return; }
-        if (!$this->validateName()) { redirect('roles/edit/' . $id); return; }
+        if (!$this->validateName($id)) { redirect('roles/edit/' . $id); return; }
         $this->role_model->update($id, $this->payload(), $this->permissions());
         if ((int) $id === (int) $this->currentUser['role_id']) {
             $this->session->set_userdata('auth_permissions', $this->role_model->permissions($id));
@@ -61,7 +61,7 @@ class Roles extends MY_Controller
 
     private function form($mode, array $role, array $permissions, $action)
     {
-        $this->render('form', ['title' => ($mode === 'create' ? 'Tambah' : 'Edit') . ' Role - ISP BATARA NET',
+        $this->render('form', ['title' => ($mode === 'create' ? 'Tambah' : 'Edit') . ' Role - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => $mode, 'role' => $role, 'permissions' => $permissions,
             'feature_options' => $this->role_model->feature_options(), 'action' => $action]);
     }
@@ -73,10 +73,16 @@ class Roles extends MY_Controller
     }
 
     private function permissions() { return (array) $this->input->post('permissions'); }
-    private function validateName()
+    private function validateName($ignoreId = null)
     {
-        if (trim($this->input->post('name', true)) !== '') { return true; }
-        $this->session->set_flashdata('error', 'Nama role wajib diisi.'); return false;
+        $name = trim($this->input->post('name', true));
+        if ($name === '') {
+            $this->session->set_flashdata('error', 'Nama role wajib diisi.'); return false;
+        }
+        if ($this->role_model->name_exists($name, $ignoreId)) {
+            $this->session->set_flashdata('error', 'Nama role sudah digunakan pada ISP ini.'); return false;
+        }
+        return true;
     }
     protected function render($view, array $data = []) { $data['body_class'] = 'monitoring-page'; parent::render($view, $data); }
 }

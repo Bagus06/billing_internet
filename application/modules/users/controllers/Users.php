@@ -14,7 +14,7 @@ class Users extends MY_Controller
 
     public function index()
     {
-        $this->render('index', ['title' => 'Users - ISP BATARA NET', 'users' => $this->user_model->get_all()]);
+        $this->render('index', ['title' => 'Users - ' . app_setting('isp_name', 'ISP Billing'), 'users' => $this->user_model->get_all()]);
     }
 
     public function create()
@@ -78,7 +78,7 @@ class Users extends MY_Controller
     private function form($mode, array $user, $action)
     {
         $this->render('form', [
-            'title' => ($mode === 'create' ? 'Tambah' : 'Edit') . ' User - ISP BATARA NET',
+            'title' => ($mode === 'create' ? 'Tambah' : 'Edit') . ' User - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => $mode, 'user' => $user, 'roles' => $this->role_model->get_all(true), 'action' => $action,
         ]);
     }
@@ -100,8 +100,15 @@ class Users extends MY_Controller
         if ($data['name'] === '' || $data['username'] === '' || !$data['role_id'] || ($passwordRequired && $data['password'] === '')) {
             $this->session->set_flashdata('error', 'Nama, username, role, dan password wajib dilengkapi.'); return false;
         }
+        $role = $this->role_model->find($data['role_id']);
+        if (!$role || empty($role['is_active'])) {
+            $this->session->set_flashdata('error', 'Role tidak tersedia pada ISP ini atau sedang nonaktif.'); return false;
+        }
         if ($data['email'] !== '' && !filter_var($data['email'], FILTER_VALIDATE_EMAIL)) {
             $this->session->set_flashdata('error', 'Format email tidak valid.'); return false;
+        }
+        if ($data['email'] !== '' && $this->user_model->email_exists_global($data['email'], $ignoreId)) {
+            $this->session->set_flashdata('error', 'Email sudah digunakan akun lain. Gunakan email unik untuk login pusat.'); return false;
         }
         if ($this->user_model->username_exists($data['username'], $ignoreId)) {
             $this->session->set_flashdata('error', 'Username sudah digunakan.'); return false;

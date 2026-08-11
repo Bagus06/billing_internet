@@ -1,15 +1,31 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Auth_model extends CI_Model
+class Auth_model extends MY_Model
 {
     public function find_by_username($username)
     {
         return $this->db
             ->select('users.*, roles.name AS role_name')
             ->from('users')
-            ->join('roles', 'roles.id = users.role_id', 'left')
+            ->join('roles', 'roles.id = users.role_id', 'inner')
             ->where('users.username', $username)
+            ->where('roles.is_active', 1)
+            ->limit(1)
+            ->get()
+            ->row_array();
+    }
+
+    public function find_session_user($userId)
+    {
+        return $this->db
+            ->select('users.*, roles.name AS role_name')
+            ->from('users')
+            ->join('roles', 'roles.id = users.role_id', 'inner')
+            ->where('users.id', (int) $userId)
+            ->where('users.is_active', 1)
+            ->where('roles.is_active', 1)
+            ->limit(1)
             ->get()
             ->row_array();
     }

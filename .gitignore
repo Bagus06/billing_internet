@@ -2,12 +2,26 @@
 /.htaccess
 /logs
 /plugins
+/docs/
+/build/
 
 application/logs/*
 !application/logs/index.html
 !application/logs/.htaccess
 
 /assets/img/ktp/*
+!/assets/img/ktp/.htaccess
+!/assets/img/ktp/index.html
+/assets/img/branding/tenant-*/
+
+/storage/private/*
+!/storage/private/.htaccess
+!/storage/private/index.html
+!/storage/private/.gitignore
+/storage/backups/
+/storage/cache/*
+!/storage/cache/.htaccess
+!/storage/cache/index.html
 
 .htaccess
 .env

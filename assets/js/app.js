@@ -1,6 +1,31 @@
 (function () {
+    let deferredInstallPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (event) {
+        event.preventDefault(); deferredInstallPrompt = event;
+        window.dispatchEvent(new CustomEvent('appinstallavailable'));
+    });
     const root = document.documentElement;
     const themeMeta = document.querySelector('meta[name="theme-color"]');
+    const csrfMeta = document.querySelector('meta[name="app-csrf-token"]');
+    const csrfToken = csrfMeta ? csrfMeta.content : '';
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        const actionUrl = form ? new URL(form.action || window.location.href, window.location.href) : null;
+        if (!csrfToken || !form || !form.method || actionUrl.origin !== window.location.origin || form.method.toUpperCase() === 'GET' || form.querySelector('input[name="_app_csrf_token"]')) return;
+        const input = document.createElement('input'); input.type = 'hidden'; input.name = '_app_csrf_token'; input.value = csrfToken; form.appendChild(input);
+    }, true);
+    if (csrfToken && window.fetch) {
+        const nativeFetch = window.fetch.bind(window);
+        window.fetch = function (input, options) {
+            options = options || {}; const method = String(options.method || 'GET').toUpperCase();
+            const targetUrl = new URL(typeof input === 'string' ? input : input.url, window.location.href);
+            if (targetUrl.origin === window.location.origin && !['GET','HEAD','OPTIONS'].includes(method)) {
+                const headers = new Headers(options.headers || {}); headers.set('X-CSRF-Token', csrfToken); options.headers = headers;
+            }
+            return nativeFetch(input, options);
+        };
+    }
 
     function applyTheme(theme, persist) {
         const nextTheme = theme === 'light' ? 'light' : 'dark';
@@ -100,7 +125,7 @@
         window.addEventListener('load', function () {
             const baseMeta = document.querySelector('meta[name="app-base-url"]');
             const baseUrl = baseMeta ? baseMeta.content : '/';
-            navigator.serviceWorker.register(baseUrl + 'sw.js', { scope: baseUrl }).catch(function () {});
+            navigator.serviceWorker.register(baseUrl + 'sw.js', { scope: baseUrl }).then(function (registration) { registration.update(); }).catch(function () {});
         });
     }
 
@@ -138,6 +163,32 @@
             }, options || {}));
         }
     };
+
+    function standaloneMode() {
+        return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+    }
+    function installDismissedRecently() {
+        const dismissed = Number(localStorage.getItem('pwa_install_dismissed_at') || 0);
+        return dismissed > 0 && Date.now() - dismissed < 7 * 24 * 60 * 60 * 1000;
+    }
+    function showInstallRecommendation() {
+        if (!deferredInstallPrompt || standaloneMode() || installDismissedRecently() || document.querySelector('.pwa-install-recommendation')) return;
+        const panel = document.createElement('aside');
+        panel.className = 'pwa-install-recommendation';
+        panel.innerHTML = '<div class="pwa-install-icon"><i class="fa-solid fa-mobile-screen-button"></i></div><div><strong>Install aplikasi billing</strong><span>Akses lebih cepat dari layar utama dan gunakan tampilan seperti aplikasi.</span></div><div class="pwa-install-actions"><button type="button" data-pwa-install>Install</button><button type="button" data-pwa-dismiss aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button></div>';
+        document.body.appendChild(panel);
+        requestAnimationFrame(function () { panel.classList.add('is-visible'); });
+        panel.querySelector('[data-pwa-install]').addEventListener('click', function () {
+            const prompt = deferredInstallPrompt; deferredInstallPrompt = null; panel.remove();
+            prompt.prompt(); prompt.userChoice.catch(function () {});
+        });
+        panel.querySelector('[data-pwa-dismiss]').addEventListener('click', function () {
+            localStorage.setItem('pwa_install_dismissed_at', String(Date.now())); panel.remove();
+        });
+    }
+    window.addEventListener('appinstallavailable', showInstallRecommendation);
+    window.addEventListener('appinstalled', function () { deferredInstallPrompt = null; localStorage.removeItem('pwa_install_dismissed_at'); const panel = document.querySelector('.pwa-install-recommendation'); if (panel) panel.remove(); });
+    if (deferredInstallPrompt) showInstallRecommendation();
 
     document.querySelectorAll('.app-flash-message').forEach(function (message) {
         window.AppAlert.notify(message.dataset.message || '', message.dataset.type || 'info');
@@ -281,5 +332,37 @@
                 menu.removeAttribute('open');
             });
         }
+    });
+
+    // Show the Search/Enter action on Android keyboards for every search field.
+    const searchFieldSelector = [
+        'input[type="search"]',
+        '.customer-card-filter input[type="text"]',
+        '.customer-search-row input[type="text"]',
+        'input[name="search"]',
+        'input[name="q"]',
+        '[data-search-input]'
+    ].join(',');
+
+    function configureSearchField(field) {
+        if (!field || !field.matches(searchFieldSelector)) return;
+        field.setAttribute('enterkeyhint', 'search');
+        field.setAttribute('autocapitalize', 'none');
+        field.setAttribute('autocomplete', 'off');
+        field.setAttribute('spellcheck', 'false');
+    }
+
+    document.querySelectorAll(searchFieldSelector).forEach(configureSearchField);
+    document.addEventListener('focusin', function (event) {
+        if (event.target instanceof HTMLInputElement) configureSearchField(event.target);
+    });
+    document.addEventListener('keydown', function (event) {
+        const field = event.target;
+        if (event.key !== 'Enter' || !(field instanceof HTMLInputElement) || !field.matches(searchFieldSelector)) return;
+        const form = field.form;
+        if (!form) { event.preventDefault(); field.blur(); return; }
+        event.preventDefault();
+        if (typeof form.requestSubmit === 'function') form.requestSubmit();
+        else if (form.checkValidity()) form.submit();
     });
 })();

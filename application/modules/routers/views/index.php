@@ -12,11 +12,11 @@
 
     <section class="menu-shell monitoring-shell">
         <div class="brand-bar">
-            <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo">
+            <img src="<?= base_url(app_setting('logo_path', 'assets/img/default-isp-logo.svg')) ?>" alt="<?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>" class="brand-logo">
             <div>
                 <div class="menu-eyebrow">
                     <i class="fa-solid fa-server me-2"></i>
-                    ISP BATARA NET
+                    <?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>
                 </div>
                 <div class="brand-subtitle">Data Mikrotik</div>
             </div>
@@ -60,11 +60,11 @@
                                         <?= !empty($router['is_active']) ? 'Aktif' : 'Nonaktif' ?>
                                     </span>
                                 </td>
-                                <td>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('monitoring/router/' . $router['id']) ?>">View</a>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('routers/edit/' . $router['id']) ?>">Edit</a>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('routers/delete/' . $router['id']) ?>" data-confirm="Hapus router ini?">Delete</a>
-                                </td>
+                                <td><div class="table-action-group">
+                                    <a class="table-action-button is-view" href="<?= site_url('routers/status/' . $router['id']) ?>" title="Lihat status dan resource perangkat" aria-label="Monitor <?= html_escape($router['name']) ?>"><i class="fa-solid fa-gauge-high"></i><span>Monitor</span></a>
+                                    <a class="table-action-button is-edit" href="<?= site_url('routers/edit/' . $router['id']) ?>"><i class="fa-solid fa-pen-to-square"></i><span>Edit</span></a>
+                                    <a class="table-action-button is-delete" href="<?= site_url('routers/delete/' . $router['id']) ?>" data-confirm="Hapus router ini?"><i class="fa-solid fa-trash-can"></i><span>Hapus</span></a>
+                                </div></td>
                             </tr>
                         <?php endforeach; ?>
                     </tbody>

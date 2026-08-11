@@ -11,9 +11,9 @@
     <div class="card glass-card shadow-sm mb-4 calculator-shell">
         <div class="card-header glass-header calculator-header">
             <div class="brand-bar compact-brand">
-                <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo brand-logo-sm">
+                <img src="<?= base_url(app_setting('logo_path', 'assets/img/default-isp-logo.svg')) ?>" alt="<?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>" class="brand-logo brand-logo-sm">
                 <div>
-                    <div class="header-kicker">ISP BATARA NET</div>
+                    <div class="header-kicker"><?= html_escape(app_setting('isp_name', 'ISP Billing')) ?></div>
                     <h4 class="mb-0">
                         <i class="fa-solid fa-network-wired me-2"></i>
                         Calculator Redaman

@@ -17,9 +17,18 @@ class Mikrotik_query
 
     public function connect(array $router)
     {
+        $router = $this->assertRouterAccess($router);
         $api = new Mikrotik_api();
         $api->connect(mikrotik_normalize_router($router));
         return $api;
+    }
+
+    public function assertRouterAccess(array $router)
+    {
+        if (empty($router['id'])) {
+            throw new RuntimeException('Akses router ditolak karena identitas router tidak valid.');
+        }
+        return $router;
     }
 
     public function run(array $router, callable $callback)
@@ -35,6 +44,61 @@ class Mikrotik_query
     public function secrets(array $router) { return $this->run($router, function ($api) { return mikrotik_clean_rows($api->getPppSecrets()); }); }
     public function profiles(array $router) { return $this->run($router, function ($api) { return mikrotik_clean_rows($api->getPppProfiles()); }); }
     public function ipPools(array $router) { return $this->run($router, function ($api) { return mikrotik_clean_rows($api->getIpPools()); }); }
+
+    public function prepareOntRemote(array $router, $username, $ruleComment = 'Forward-ONT')
+    {
+        $username = trim((string) $username);
+        if ($username === '') throw new InvalidArgumentException('Username PPPoE pelanggan tidak valid.');
+
+        return $this->run($router, function ($api) use ($username, $ruleComment, $router) {
+            $session = null;
+            foreach (mikrotik_clean_rows($api->getActiveSessions()) as $row) {
+                if (isset($row['name']) && strcasecmp(trim((string) $row['name']), $username) === 0) { $session = $row; break; }
+            }
+            if (!$session || empty($session['address'])) throw new RuntimeException('Pelanggan sedang offline atau IP remote ONT tidak ditemukan pada active session.');
+            $localIp = trim((string) $session['address']);
+            if (!filter_var($localIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) throw new RuntimeException('IP remote ONT dari active session tidak valid.');
+
+            $natRows = mikrotik_clean_rows($api->comm('/ip/firewall/nat/print'));
+            $nat = null;
+            foreach ($natRows as $row) {
+                if (isset($row['comment']) && strcasecmp(trim((string) $row['comment']), $ruleComment) === 0) { $nat = $row; break; }
+            }
+            if (!$nat || empty($nat['.id'])) throw new RuntimeException('NAT dengan comment ' . $ruleComment . ' tidak ditemukan pada MikroTik.');
+            if (($nat['chain'] ?? '') !== 'dstnat' || ($nat['action'] ?? '') !== 'dst-nat' || strtolower((string) ($nat['protocol'] ?? '')) !== 'tcp') {
+                throw new RuntimeException('NAT ' . $ruleComment . ' harus menggunakan chain dstnat, action dst-nat, dan protocol TCP.');
+            }
+            if (in_array(strtolower((string) ($nat['disabled'] ?? 'false')), ['true', 'yes', '1'], true)) throw new RuntimeException('NAT ' . $ruleComment . ' sedang dinonaktifkan.');
+
+            $publicIp = trim((string) ($nat['dst-address'] ?? ''));
+            if (!filter_var($publicIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) {
+                $publicIp = trim((string) ($router['host'] ?? ''));
+            }
+            $publicPort = trim((string) ($nat['dst-port'] ?? ''));
+            if (!filter_var($publicIp, FILTER_VALIDATE_IP, FILTER_FLAG_IPV4)) throw new RuntimeException('IP public pada NAT ' . $ruleComment . ' tidak valid.');
+            if (!ctype_digit($publicPort) || (int) $publicPort < 1 || (int) $publicPort > 65535) throw new RuntimeException('Public port pada NAT ' . $ruleComment . ' tidak valid.');
+
+            $response = $api->comm('/ip/firewall/nat/set', ['=.id' => $nat['.id'], '=to-addresses' => $localIp, '=to-ports' => '80']);
+            foreach ($response as $row) if (isset($row['!trap']) || isset($row['!fatal'])) throw new RuntimeException('MikroTik menolak perubahan target NAT ' . $ruleComment . '.');
+
+            $verified = null;
+            foreach (mikrotik_clean_rows($api->comm('/ip/firewall/nat/print')) as $row) {
+                if (($row['.id'] ?? '') === $nat['.id']) { $verified = $row; break; }
+            }
+            if (!$verified || ($verified['to-addresses'] ?? '') !== $localIp || (string) ($verified['to-ports'] ?? '') !== '80') {
+                throw new RuntimeException('Verifikasi NAT gagal: target ONT atau port HTTP belum berubah.');
+            }
+
+            return [
+                'username' => $username,
+                'local_ip' => $localIp,
+                'public_ip' => $publicIp,
+                'public_port' => (int) $publicPort,
+                'url' => 'http://' . $publicIp . ':' . (int) $publicPort,
+                'nat_comment' => $ruleComment,
+            ];
+        });
+    }
 
     public function findProfile(array $router, $value, $field = '.id')
     {

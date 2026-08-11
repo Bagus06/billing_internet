@@ -6,6 +6,7 @@
     const sessionsUrl = app.dataset.sessionsUrl;
     const disconnectUrl = app.dataset.disconnectUrl;
     const connectUrl = app.dataset.connectUrl;
+    const remoteOntUrl = app.dataset.remoteOntUrl;
     const trafficUrl = app.dataset.trafficUrl;
     const isMobile = window.matchMedia('(max-width: 767.98px), (pointer: coarse)').matches;
     const refreshMilliseconds = Math.max(10, Number(app.dataset.refreshSeconds) || 30) * 1000;
@@ -22,10 +23,12 @@
     let activeModal = null;
     let activeModalSource = null;
     let activeBackdrop = null;
+    let activeMapModal = null;
     const trafficSamples = new Map();
     const trafficElements = new Map();
     let sessionsLoading = false;
     let trafficLoading = false;
+    let renderPending = false;
 
     function escapeHtml(value) {
         return String(value === undefined || value === null || value === '' ? '-' : value)
@@ -39,7 +42,7 @@
         message.classList.toggle('text-muted', !danger);
     }
 
-    function detail(label, value) {
+    function detail(label, value, wide, action) {
         const icons = {
             Nama: 'fa-user', ID: 'fa-hashtag', Kode: 'fa-id-badge', NIK: 'fa-address-card',
             Telepon: 'fa-phone', Alamat: 'fa-location-dot', Paket: 'fa-box-open', Kelompok: 'fa-users',
@@ -50,7 +53,30 @@
             Komentar: 'fa-note-sticky', Router: 'fa-server'
         };
         const icon = icons[label] || 'fa-circle-info';
-        return `<div><span><i class="fa-solid ${icon}" aria-hidden="true"></i>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
+        const content = action ? `<div class="pppoe-detail-value-action"><strong>${escapeHtml(value)}</strong>${action}</div>` : `<strong>${escapeHtml(value)}</strong>`;
+        return `<div class="pppoe-detail-item${wide ? ' is-wide' : ''}${action ? ' has-action' : ''}"><span><i class="fa-solid ${icon}" aria-hidden="true"></i>${label}</span>${content}</div>`;
+    }
+
+    function detailGroup(title, icon, content) {
+        return `<section class="pppoe-detail-group"><div class="pppoe-detail-group-title"><i class="fa-solid ${icon}" aria-hidden="true"></i>${title}</div><div class="pppoe-detail-group-body">${content}</div></section>`;
+    }
+
+    function mapButton(row) {
+        const latitude = Number(row.customer_latitude);
+        const longitude = Number(row.customer_longitude);
+        const hasCoordinates = row.customer_latitude !== null && row.customer_latitude !== undefined && row.customer_latitude !== '' && row.customer_longitude !== null && row.customer_longitude !== undefined && row.customer_longitude !== '';
+        const valid = hasCoordinates && Number.isFinite(latitude) && Number.isFinite(longitude) && latitude >= -90 && latitude <= 90 && longitude >= -180 && longitude <= 180;
+        if (!valid) return '<button type="button" class="pppoe-map-button is-disabled" disabled title="Koordinat pelanggan belum tersedia"><i class="fa-solid fa-map-location-dot"></i>Lihat Peta</button>';
+        return `<button type="button" class="pppoe-map-button btn-view-customer-map" data-latitude="${escapeHtml(latitude)}" data-longitude="${escapeHtml(longitude)}" data-customer-name="${escapeHtml(row.customer_name)}" title="Lihat lokasi pelanggan"><i class="fa-solid fa-map-location-dot"></i>Lihat Peta</button>`;
+    }
+
+    function whatsappButton(phone, customerName) {
+        let number = String(phone || '').replace(/\D+/g, '');
+        if (number.startsWith('0')) number = '62' + number.slice(1);
+        else if (number.startsWith('8')) number = '62' + number;
+        const valid = /^62\d{8,13}$/.test(number);
+        if (!valid) return '<button type="button" class="pppoe-whatsapp-button is-disabled" disabled title="Nomor WhatsApp tidak valid"><i class="fa-brands fa-whatsapp"></i>Chat</button>';
+        return `<a class="pppoe-whatsapp-button" href="https://wa.me/${number}" target="_blank" rel="noopener noreferrer" title="Chat WhatsApp ${escapeHtml(customerName)}"><i class="fa-brands fa-whatsapp"></i>Chat</a>`;
     }
 
     function opticalLabel(row) {
@@ -161,6 +187,12 @@
                     data-router-id="${escapeHtml(row.router_id)}" data-secret-id="${escapeHtml(row.secret_id)}">
                     <i class="fa-solid fa-plug-circle-check"></i> Connect
                 </button>` : '';
+            const remoteOnt = online ? `
+                <button type="button" class="pppoe-remote-ont btn-remote-ont"
+                    data-router-id="${escapeHtml(row.router_id)}" data-username="${escapeHtml(row.username)}"
+                    title="Arahkan Forward-ONT lalu buka halaman ONT">
+                    <i class="fa-solid fa-router"></i> Remote
+                </button>` : '';
 
             return `<article class="pppoe-user-card ${online ? 'is-on' : 'is-off'}" tabindex="0">
                 <div class="pppoe-card-head">
@@ -181,37 +213,46 @@
                 <div class="pppoe-card-actions">
                     ${cardDisconnect}
                     ${connect}
+                    ${remoteOnt}
                     <button type="button" class="pppoe-detail-button"><i class="fa-solid fa-circle-info"></i> Detail</button>
                 </div>
                 <div class="pppoe-hover-detail" role="tooltip">
                     <div class="pppoe-detail-title"><h6><i class="fa-solid fa-address-card" aria-hidden="true"></i> Detail Pelanggan</h6><button type="button" class="pppoe-detail-close" aria-label="Tutup"><i class="fa-solid fa-xmark"></i></button></div>
-                    ${detail('Nama', row.customer_name)}
-                    ${detail('ID', row.customer_id)}
-                    ${detail('Kode', row.customer_code)}
-                    ${detail('NIK', row.customer_nik)}
-                    ${detail('Telepon', row.customer_phone)}
-                    ${detail('Alamat', row.customer_address)}
-                    ${detail('Paket', row.customer_package)}
-                    ${detail('Kelompok', row.customer_group)}
-                    ${detail('Pelanggan', row.customer_status)}
-                    ${detail('ONT OLT', row.ont_name)}
-                    ${detail('RX Optical', opticalLabel(row))}
-                    ${detail('Sinyal', row.optical_status)}
-                    ${detail('Username', row.username)}
-                    ${detail('Status', row.status)}
-                    ${detail('Uptime', formatUptime(row.uptime))}
-                    ${detail('Download', formatRate(row.download_rate))}
-                    ${detail('Upload', formatRate(row.upload_rate))}
-                    ${detail('Last OFF', row.last_off)}
-                    ${detail('IP Address', row.address)}
-                    ${detail('Local Address', row.local_address)}
-                    ${detail('Caller ID', row.caller_id)}
-                    ${detail('Profile', row.profile)}
-                    ${detail('Service', row.service)}
-                    ${detail('Komentar', row.comment)}
-                    ${detail('Router', row.router)}
-                    ${disconnect}
-                    ${popupConnect}
+                    ${detailGroup('Data Pelanggan', 'fa-user', `
+                        ${detail('Nama', row.customer_name, true)}
+                        ${detail('ID', row.customer_id)}
+                        ${detail('Kode', row.customer_code)}
+                        ${detail('NIK', row.customer_nik)}
+                        ${detail('Telepon', row.customer_phone, false, whatsappButton(row.customer_phone, row.customer_name))}
+                        ${detail('Alamat', row.customer_address, true)}
+                        <div class="pppoe-detail-map-action">${mapButton(row)}</div>
+                    `)}
+                    ${detailGroup('Layanan', 'fa-box-open', `
+                        ${detail('Paket', row.customer_package)}
+                        ${detail('Kelompok', row.customer_group)}
+                        ${detail('Pelanggan', row.customer_status)}
+                        ${detail('Username', row.username, true)}
+                        ${detail('Profile', row.profile)}
+                        ${detail('Service', row.service)}
+                        ${detail('Router', row.router, true)}
+                        ${detail('Komentar', row.comment, true)}
+                    `)}
+                    ${detailGroup('Koneksi & Traffic', 'fa-chart-line', `
+                        ${detail('Status', row.status)}
+                        ${detail('Uptime', formatUptime(row.uptime))}
+                        ${detail('Download', formatRate(row.download_rate))}
+                        ${detail('Upload', formatRate(row.upload_rate))}
+                        ${detail('Last OFF', row.last_off)}
+                        ${detail('IP Address', row.address)}
+                        ${detail('Local Address', row.local_address)}
+                        ${detail('Caller ID', row.caller_id)}
+                    `)}
+                    ${detailGroup('Perangkat ONT', 'fa-router', `
+                        ${detail('ONT OLT', row.ont_name)}
+                        ${detail('RX Optical', opticalLabel(row))}
+                        ${detail('Sinyal', row.optical_status)}
+                    `)}
+                    <div class="pppoe-detail-actions">${disconnect}${popupConnect}${remoteOnt}</div>
                 </div>
             </article>`;
         }).join('');
@@ -226,7 +267,7 @@
         return String(a || '').localeCompare(String(b || ''), 'id', { sensitivity: 'base' });
     }
 
-    function applyFilters() {
+    function applyFilters(preserveOpenDetail) {
         const keyword = String(searchInput.value || '').trim().toLowerCase();
         const sort = sortSelect.value;
         const rows = allRows.filter(function (row) {
@@ -249,8 +290,13 @@
         });
 
         resultCount.textContent = `${rows.length} dari ${allRows.length} pelanggan`;
+        if (preserveOpenDetail && activeModal) {
+            renderPending = true;
+            return;
+        }
         closeDetail();
         renderCards(rows);
+        renderPending = false;
     }
 
     function openDetail(card) {
@@ -270,6 +316,7 @@
     }
 
     function closeDetail() {
+        closeMap();
         if (!activeModal) return;
         activeModal.classList.remove('is-open');
         if (activeModalSource && activeModalSource.isConnected) {
@@ -284,6 +331,26 @@
         activeBackdrop = null;
         document.body.classList.remove('pppoe-modal-open');
         if (appShell) appShell.inert = false;
+        if (renderPending) applyFilters(false);
+    }
+
+    function openMap(button) {
+        closeMap();
+        const latitude = Number(button.dataset.latitude), longitude = Number(button.dataset.longitude);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        const query = encodeURIComponent(latitude + ',' + longitude);
+        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${query}`;
+        activeMapModal = document.createElement('div');
+        activeMapModal.className = 'pppoe-map-modal';
+        activeMapModal.innerHTML = `<div class="pppoe-map-modal-backdrop" data-close-customer-map></div><section class="pppoe-map-modal-panel" role="dialog" aria-modal="true" aria-label="Lokasi pelanggan"><header><div><small>Lokasi Pelanggan</small><strong>${escapeHtml(button.dataset.customerName)}</strong></div><button type="button" data-close-customer-map aria-label="Tutup peta"><i class="fa-solid fa-xmark"></i></button></header><iframe src="https://maps.google.com/maps?q=${query}&z=18&output=embed" title="Peta lokasi ${escapeHtml(button.dataset.customerName)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe><footer><span><i class="fa-solid fa-location-crosshairs"></i>${escapeHtml(latitude)}, ${escapeHtml(longitude)}</span><a href="${mapsUrl}" target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-diamond-turn-right"></i>Buka di Maps</a></footer></section>`;
+        document.body.appendChild(activeMapModal);
+        requestAnimationFrame(function () { if (activeMapModal) activeMapModal.classList.add('is-open'); });
+    }
+
+    function closeMap() {
+        if (!activeMapModal) return;
+        activeMapModal.remove();
+        activeMapModal = null;
     }
 
     async function loadSessions() {
@@ -298,7 +365,7 @@
             totalCount.textContent = data.total_secrets || 0;
             allRows = data.rows || [];
             updateTraffic(allRows);
-            applyFilters();
+            applyFilters(true);
             setMessage(data.errors && data.errors.length ? data.errors.join(' | ') : 'Data berhasil diperbarui.', data.errors && data.errors.length);
         } catch (error) {
             setMessage('Gagal mengambil data monitoring.', true);
@@ -357,6 +424,32 @@
         }
     }
 
+    async function remoteOnt(button) {
+        const remoteWindow = window.open('about:blank', '_blank');
+        if (remoteWindow) {
+            remoteWindow.opener = null;
+            remoteWindow.document.write('<title>Menyiapkan Remote ONT</title><p style="font-family:Arial;padding:24px">Menyiapkan NAT Forward-ONT...</p>');
+        }
+        const formData = new FormData();
+        formData.append('router_id', button.dataset.routerId);
+        formData.append('username', button.dataset.username);
+        button.disabled = true;
+        try {
+            const response = await fetch(remoteOntUrl, { method: 'POST', body: formData, credentials: 'same-origin', headers: { Accept: 'application/json' } });
+            const data = await response.json();
+            if (!data.success || !data.remote || !data.remote.url) throw new Error(data.message || 'Remote ONT gagal disiapkan.');
+            setMessage(data.message || 'NAT Forward-ONT berhasil diperbarui.', false);
+            if (remoteWindow) remoteWindow.location.replace(data.remote.url);
+            else window.open(data.remote.url, '_blank', 'noopener');
+        } catch (error) {
+            if (remoteWindow) remoteWindow.close();
+            setMessage(error.message || 'Gagal menyiapkan remote ONT.', true);
+            AppAlert.notify(error.message || 'Gagal menyiapkan remote ONT.', 'error');
+        } finally {
+            button.disabled = false;
+        }
+    }
+
     cards.addEventListener('click', function (event) {
         const detailButton = event.target.closest('.pppoe-detail-button');
 
@@ -370,6 +463,12 @@
         const closeButton = event.target.closest('.pppoe-detail-close');
         const disconnectButton = event.target.closest('.btn-disconnect-session');
         const connectButton = event.target.closest('.btn-connect-secret');
+        const remoteOntButton = event.target.closest('.btn-remote-ont');
+        const mapButton = event.target.closest('.btn-view-customer-map');
+        const mapClose = event.target.closest('[data-close-customer-map]');
+        if (mapClose) { closeMap(); return; }
+        if (mapButton) { openMap(mapButton); return; }
+        if (activeMapModal && event.target.closest('.pppoe-map-modal-panel')) return;
         if (closeButton) { closeDetail(); return; }
         if (disconnectButton) {
             AppAlert.confirm('Disconnect user dan nonaktifkan PPP Secret ini?', { icon: 'warning', confirmButtonText: 'Ya, disconnect' }).then(function (result) {
@@ -383,21 +482,24 @@
             });
             return;
         }
+        if (remoteOntButton) { remoteOnt(remoteOntButton); return; }
         if (activeModal && !event.target.closest('.pppoe-hover-detail') && !event.target.closest('.pppoe-detail-button')) closeDetail();
     });
 
     document.addEventListener('keydown', function (event) {
         if (event.key === 'Escape') {
+            if (activeMapModal) { closeMap(); return; }
             closeDetail();
         }
     });
 
-    searchInput.addEventListener('input', applyFilters);
-    sortSelect.addEventListener('change', applyFilters);
+    searchInput.addEventListener('input', function () { applyFilters(false); });
+    sortSelect.addEventListener('change', function () { applyFilters(false); });
 
-    loadSessions();
-    setTimeout(loadTraffic, 1500);
-    setInterval(loadTraffic, trafficMilliseconds);
+    loadSessions().then(function () {
+        setTimeout(loadTraffic, 500);
+        setInterval(loadTraffic, trafficMilliseconds);
+    });
     setInterval(loadSessions, refreshMilliseconds);
     document.addEventListener('visibilitychange', function () {
         if (!document.hidden) { loadSessions(); loadTraffic(); }

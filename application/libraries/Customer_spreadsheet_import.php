@@ -35,7 +35,7 @@ class Customer_spreadsheet_import
         $packageName=trim($r['Paket']??'');
         $package=$this->ci->db->where('package_name',$packageName)->get('internet_packages')->row_array();
         $data=['customer_code'=>$code,'name'=>trim($r['NAMA']??''),'phone'=>trim($r['Telephone']??''),'nik'=>$nik,
-            'ktp_photo'=>trim($r['Foto KTP']??''),'address'=>trim($r['Alamat']??''),'package_id'=>$package?(int)$package['id']:null,
+            'ktp_photo'=>'','address'=>trim($r['Alamat']??''),'package_id'=>$package?(int)$package['id']:null,
             'package_name'=>$package?$package['package_name']:$packageName,'price'=>$package?(float)$package['price']:$this->price($r['Harga']??0),
             'psb_date'=>$this->date($r['Tanggal PSB']??''),'group_name'=>trim($r['Kelompok']??''),
             'customer_status'=>strtoupper(trim($r['Status Pelanggan']??'ACTIVE'))==='NONACTIVE'?'NONACTIVE':'ACTIVE',

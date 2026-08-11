@@ -20,11 +20,11 @@
 
     <section class="menu-shell monitoring-shell">
         <div class="brand-bar">
-            <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo">
+            <img src="<?= base_url(app_setting('logo_path', 'assets/img/default-isp-logo.svg')) ?>" alt="<?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>" class="brand-logo">
             <div>
                 <div class="menu-eyebrow">
                     <i class="fa-solid fa-wifi me-2"></i>
-                    ISP BATARA NET
+                    <?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>
                 </div>
                 <div class="brand-subtitle">Paket Internet</div>
             </div>
@@ -78,8 +78,8 @@
                                 </td>
                                 <td><?= html_escape($package['notes']) ?></td>
                                 <td>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('packages/edit/' . $package['id']) ?>">Edit</a>
-                                    <a class="monitoring-action text-decoration-none d-inline-flex align-items-center" href="<?= site_url('packages/delete/' . $package['id']) ?>" data-confirm="Hapus paket ini?">Delete</a>
+                                    <a class="table-action-button is-edit" href="<?= site_url('packages/edit/' . $package['id']) ?>"><i class="fa-solid fa-pen-to-square"></i><span>Edit</span></a>
+                                    <a class="table-action-button is-delete" href="<?= site_url('packages/delete/' . $package['id']) ?>" data-confirm="Hapus paket ini?"><i class="fa-solid fa-trash-can"></i><span>Hapus</span></a>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

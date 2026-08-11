@@ -12,7 +12,7 @@ $money = function ($value) { return 'Rp ' . number_format((float) $value, 0, ','
         <form method="get" action="<?= site_url('financial-reports') ?>" class="glass-panel p-3 mt-3"><input type="hidden" name="view" value="detail"><div class="row g-2 align-items-end">
             <div class="col-md-5"><label class="form-label">Tahun</label><select name="year" class="form-select"><?php foreach ($years as $item): ?><option value="<?= $item ?>" <?= $year === $item ? 'selected' : '' ?>><?= $item ?></option><?php endforeach; ?></select></div>
             <div class="col-md-5"><label class="form-label">Bulan</label><select name="month" class="form-select"><?php foreach ($months as $number=>$name): ?><option value="<?= $number ?>" <?= $month === $number ? 'selected' : '' ?>><?= $name ?></option><?php endforeach; ?></select></div>
-            <div class="col-md-2"><button class="back-button border-0 w-100 justify-content-center" type="submit"><i class="fa-solid fa-filter"></i><span>Tampilkan</span></button></div>
+            <div class="col-md-2"><button class="filter-submit-button w-100 justify-content-center" type="submit"><i class="fa-solid fa-filter"></i><span>Tampilkan</span></button></div>
         </div></form>
 
         <div class="row g-3 mt-1">

@@ -7,7 +7,7 @@ class Calculator extends MY_Controller
     public function index()
     {
         $data = [
-            'title' => 'Calculator Redaman - ISP BATARA NET',
+            'title' => 'Calculator Redaman - ' . app_setting('isp_name', 'ISP Billing'),
             'body_class' => 'calculator-page',
             'splitter_loss' => $this->splitterLoss(),
         ];

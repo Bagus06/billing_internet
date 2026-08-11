@@ -22,4 +22,7 @@ Ketentuan:
 - Jangan menyimpan password plaintext, community SNMP, API key, atau kredensial lain.
 - Sertakan komentar mengenai tujuan perubahan dan prasyaratnya.
 - Perubahan berikutnya menggunakan tanggal saat perubahan dibuat, bukan mengubah file lama.
-
+- File yang sudah tercatat `Applied` pada menu Konfigurasi tidak boleh diedit karena checksum akan berubah.
+- Jalankan migration production melalui **Konfigurasi → Database Migration**.
+- Migration otomatis menolak `DROP TABLE`, `TRUNCATE`, `DELETE`, `ALTER TABLE DROP`, dan `RENAME TABLE`.
+- Gunakan SQL biasa tanpa `DELIMITER` atau stored procedure agar dapat dijalankan oleh migration runner.

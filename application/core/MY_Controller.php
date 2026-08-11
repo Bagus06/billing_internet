@@ -10,6 +10,8 @@ class MY_Controller extends CI_Controller
     {
         parent::__construct();
 
+        if (!$this->request_guard->enforce()) return;
+
         date_default_timezone_set(app_setting('timezone', 'Asia/Jakarta'));
 
         $this->currentUser = $this->session->userdata('auth_user');
@@ -19,6 +21,16 @@ class MY_Controller extends CI_Controller
             redirect('login');
             return;
         }
+
+        $this->load->model('auth/auth_model');
+        $verifiedUser = $this->auth_model->find_session_user($this->currentUser['id']);
+        if (!$verifiedUser) {
+            $this->clearAuthSession();
+            redirect('login');
+            return;
+        }
+        $this->refreshCurrentUser($verifiedUser);
+        $this->session->set_userdata('auth_permissions', $this->auth_model->permissions_for_role($verifiedUser['role_id']));
 
         if ($this->permission && !$this->can($this->permission)) {
             show_error('Anda tidak memiliki akses ke fitur ini.', 403, 'Akses Ditolak');
@@ -47,6 +59,11 @@ class MY_Controller extends CI_Controller
         ];
         $this->session->set_userdata('auth_user', $authUser);
         $this->currentUser = $authUser;
+    }
+
+    protected function clearAuthSession()
+    {
+        $this->session->unset_userdata(['auth_user', 'auth_permissions']);
     }
 
     protected function render($view, array $data = [])

@@ -9,11 +9,11 @@
 
     <section class="menu-shell monitoring-shell">
         <div class="brand-bar">
-            <img src="<?= base_url('assets/img/logo.jpeg') ?>" alt="ISP BATARA NET" class="brand-logo">
+            <img src="<?= base_url(app_setting('logo_path', 'assets/img/default-isp-logo.svg')) ?>" alt="<?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>" class="brand-logo">
             <div>
                 <div class="menu-eyebrow">
                     <i class="fa-solid fa-server me-2"></i>
-                    ISP BATARA NET
+                    <?= html_escape(app_setting('isp_name', 'ISP Billing')) ?>
                 </div>
                 <div class="brand-subtitle"><?= $mode === 'create' ? 'Tambah Router' : 'Edit Router' ?></div>
             </div>

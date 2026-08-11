@@ -17,7 +17,7 @@ class Monitoring extends MY_Controller
     {
         $router = $routerId ? $this->router_model->find($routerId) : null;
         $data = [
-            'title' => ($router ? $router['name'] . ' - ' : '') . 'Monitoring Mikrotik - ISP BATARA NET',
+            'title' => ($router ? $router['name'] . ' - ' : '') . 'Monitoring Mikrotik - ' . app_setting('isp_name', 'ISP Billing'),
             'body_class' => 'monitoring-page',
             'router' => $router,
         ];
@@ -32,6 +32,7 @@ class Monitoring extends MY_Controller
 
     public function summary($routerId = null)
     {
+        $this->releaseSessionLock();
         $data = $this->collectMonitoringData(false, $routerId);
 
         $this->json([
@@ -47,6 +48,7 @@ class Monitoring extends MY_Controller
 
     public function sessions($routerId = null)
     {
+        $this->releaseSessionLock();
         $data = $this->collectMonitoringData(true, $routerId);
 
         $this->json([
@@ -120,8 +122,23 @@ class Monitoring extends MY_Controller
         }
     }
 
+    public function remote_ont()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        $router = $this->findRouter((int) $this->input->post('router_id'));
+        $username = trim((string) $this->input->post('username', true));
+        if (!$router || $username === '') { $this->json(['success' => false, 'message' => 'Router atau username PPPoE tidak valid.']); return; }
+        try {
+            $remote = $this->mikrotik_query->prepareOntRemote($router, $username);
+            $this->json(['success' => true, 'message' => 'NAT Forward-ONT diarahkan ke ' . $remote['local_ip'] . '.', 'remote' => $remote]);
+        } catch (Throwable $e) {
+            $this->json(['success' => false, 'message' => $e->getMessage()]);
+        }
+    }
+
     public function traffic($routerId = null)
     {
+        $this->releaseSessionLock();
         $rows = [];
         $errors = [];
         foreach ($this->routers($routerId) as $router) {
@@ -154,7 +171,14 @@ class Monitoring extends MY_Controller
         $offlineSessions = 0;
         $totalSecrets = 0;
         $customersByNik = $this->customersByNik();
-        $opticalByCustomer = $this->olt_snmp->opticalByCustomerName();
+        $ontDevices = $this->olt_snmp->devices();
+        $opticalBySerial = [];
+        $opticalByLegacyName = [];
+        foreach ($ontDevices as $device) {
+            $opticalBySerial[strtoupper($device['serial_number'])] = $device;
+            $opticalByLegacyName[$this->olt_snmp->normalizeName($device['ont_name'])] = $device;
+        }
+        $ontPairings = $this->customer_model->ont_pairings_by_customer();
 
         foreach ($this->routers($routerId) as $router) {
             try {
@@ -206,7 +230,17 @@ class Monitoring extends MY_Controller
                         $nik = $this->usernamePrefix($username);
                         $customer = isset($customersByNik[$nik]) ? $customersByNik[$nik] : null;
                         $customerNameKey = $customer ? $this->olt_snmp->normalizeName($customer['name']) : '';
-                        $optical = isset($opticalByCustomer[$customerNameKey]) ? $opticalByCustomer[$customerNameKey] : null;
+                        $pairing = $customer && isset($ontPairings[(int) $customer['id']]) ? $ontPairings[(int) $customer['id']] : null;
+                        $optical = $pairing && isset($opticalBySerial[strtoupper($pairing['ont_serial_number'])])
+                            ? $opticalBySerial[strtoupper($pairing['ont_serial_number'])] : null;
+                        // Migrasi lunak data lama: kecocokan nama hanya dipakai sekali untuk membuat pairing serial.
+                        if (!$optical && !$pairing && $customerNameKey !== '' && isset($opticalByLegacyName[$customerNameKey])) {
+                            $optical = $opticalByLegacyName[$customerNameKey];
+                            try {
+                                $this->customer_model->save_ont_pairing((int) $customer['id'], $optical);
+                                $ontPairings[(int) $customer['id']] = ['ont_serial_number' => $optical['serial_number']];
+                            } catch (Throwable $ignored) {}
+                        }
                         $rows[] = [
                             'username' => $username,
                             'address' => $isOnline && isset($session['address']) ? $session['address'] : (isset($secret['remote-address']) ? $secret['remote-address'] : '-'),
@@ -225,12 +259,15 @@ class Monitoring extends MY_Controller
                             'customer_name' => $customer ? $customer['name'] : '-',
                             'customer_phone' => $customer ? $customer['phone'] : '-',
                             'customer_address' => $customer ? $customer['address'] : '-',
+                            'customer_latitude' => $customer && isset($customer['latitude']) ? $customer['latitude'] : null,
+                            'customer_longitude' => $customer && isset($customer['longitude']) ? $customer['longitude'] : null,
                             'customer_package' => $customer ? $customer['package_name'] : '-',
                             'customer_group' => $customer ? $customer['group_name'] : '-',
                             'customer_status' => $customer ? $customer['customer_status'] : '-',
                             'optical_rx' => $optical && $optical['rx'] !== null ? $optical['rx'] : null,
                             'optical_status' => $optical ? $optical['status'] : 'unknown',
                             'ont_name' => $optical ? $optical['ont_name'] : '-',
+                            'ont_serial_number' => $optical ? $optical['serial_number'] : ($pairing ? $pairing['ont_serial_number'] : '-'),
                             'disabled' => isset($secret['disabled']) && in_array(strtolower((string) $secret['disabled']), ['true', 'yes', '1'], true),
                             'router' => $router['name'],
                             'router_id' => $router['id'],
@@ -305,6 +342,11 @@ class Monitoring extends MY_Controller
         return array_values(array_filter($rows, function ($row) {
             return !isset($row['!done']);
         }));
+    }
+
+    private function releaseSessionLock()
+    {
+        if (function_exists('session_status') && session_status() === PHP_SESSION_ACTIVE) @session_write_close();
     }
 
     private function customersByNik()

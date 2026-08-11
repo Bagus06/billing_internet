@@ -49,6 +49,10 @@ class Mikrotik_sync
             $secrets = $this->indexSecrets($api->getPppSecrets());
 
             foreach ($customers as $customer) {
+                if (!empty($customer['is_isolated'])) {
+                    $successItems[] = (isset($customer['name']) ? $customer['name'] : 'Pelanggan') . ' — dilewati karena sedang diisolir';
+                    continue;
+                }
                 $nik = preg_replace('/\D+/', '', isset($customer['nik']) ? $customer['nik'] : '');
                 $customerName = isset($customer['name']) ? $customer['name'] : 'Pelanggan';
                 $expectedSecret = ($nik !== '' ? $nik : 'NIK kosong') . app_setting('pppoe_username_suffix', '@BATARA.net');

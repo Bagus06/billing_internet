@@ -4,7 +4,70 @@ defined('BASEPATH') or exit('No direct script access allowed');
 class Olt_snmp
 {
     const ONU_NAME_OID = '1.3.6.1.4.1.50224.3.12.2.1.2';
+    const ONU_SERIAL_OID = '1.3.6.1.4.1.50224.3.12.2.1.15';
     const ONU_RX_OID = '1.3.6.1.4.1.50224.3.12.3.1.4';
+    private static $deviceCache = null;
+
+    public function devices()
+    {
+        if (self::$deviceCache !== null) return self::$deviceCache;
+        if (!extension_loaded('snmp')) return [];
+        $cacheSeconds = max(30, min(600, (int) app_setting('olt_cache_seconds', 60)));
+        $cacheDirectory = FCPATH . 'storage' . DIRECTORY_SEPARATOR . 'cache';
+        if (!is_dir($cacheDirectory)) @mkdir($cacheDirectory, 0750, true);
+        $cacheFile = $cacheDirectory . DIRECTORY_SEPARATOR . 'olt_devices.json';
+        $cached = $this->readCache($cacheFile);
+        if ($cached && (time() - (int) $cached['created_at']) < $cacheSeconds) {
+            return self::$deviceCache = $cached['devices'];
+        }
+
+        $lock = @fopen($cacheFile . '.lock', 'c');
+        if ($lock && !@flock($lock, LOCK_EX | LOCK_NB)) {
+            @fclose($lock);
+            return self::$deviceCache = ($cached ? $cached['devices'] : []);
+        }
+        $connection = $this->connection();
+        if (!$connection) { if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); } return []; }
+        list($peer, $community) = $connection;
+        snmp_set_oid_output_format(SNMP_OID_OUTPUT_NUMERIC);
+        $names = $this->walk($peer, $community, self::ONU_NAME_OID);
+        $serials = $this->walk($peer, $community, self::ONU_SERIAL_OID);
+        $powers = $this->walk($peer, $community, self::ONU_RX_OID);
+        $devices = [];
+        foreach ($names ?: [] as $oid => $value) {
+            $index = $this->lastOidPart($oid);
+            if ($index !== '') $devices[$index] = ['ont_index' => $index, 'ont_name' => $this->stringValue($value), 'serial_number' => '', 'rx' => null];
+        }
+        foreach ($serials ?: [] as $oid => $value) {
+            $index = $this->lastOidPart($oid);
+            if (isset($devices[$index])) $devices[$index]['serial_number'] = strtoupper($this->stringValue($value));
+        }
+        foreach ($powers ?: [] as $oid => $value) {
+            if (!preg_match('/\.(\d+)\.0\.0$/', $oid, $matches) || !isset($devices[$matches[1]])) continue;
+            $raw = $this->integerValue($value);
+            $devices[$matches[1]]['rx'] = $raw <= -4000 ? null : round($raw / 100, 2);
+        }
+        foreach ($devices as &$device) $device['status'] = $this->signalStatus($device['rx']);
+        unset($device);
+        $devices = array_values(array_filter($devices, function ($device) { return $device['serial_number'] !== ''; }));
+        if ($devices) @file_put_contents($cacheFile, json_encode(['created_at' => time(), 'devices' => $devices]), LOCK_EX);
+        if ($lock) { @flock($lock, LOCK_UN); @fclose($lock); }
+        return self::$deviceCache = ($devices ?: ($cached ? $cached['devices'] : []));
+    }
+
+    private function readCache($path)
+    {
+        if (!is_file($path)) return null;
+        $data = json_decode((string) @file_get_contents($path), true);
+        return is_array($data) && isset($data['created_at'], $data['devices']) && is_array($data['devices']) ? $data : null;
+    }
+
+    public function opticalBySerial()
+    {
+        $result = [];
+        foreach ($this->devices() as $device) $result[strtoupper($device['serial_number'])] = $device;
+        return $result;
+    }
 
     public function opticalByCustomerName()
     {
@@ -12,9 +75,11 @@ class Olt_snmp
             return [];
         }
 
-        $host = trim(isset($_ENV['OLT_SNMP_HOST']) ? $_ENV['OLT_SNMP_HOST'] : '');
-        $port = (int) (isset($_ENV['OLT_SNMP_PORT']) ? $_ENV['OLT_SNMP_PORT'] : 161);
-        $community = isset($_ENV['OLT_SNMP_COMMUNITY']) ? $_ENV['OLT_SNMP_COMMUNITY'] : '';
+        $host = trim((string) app_setting('olt_snmp_host', ''));
+        if ($host === '') $host = trim((string) ($_ENV['OLT_SNMP_HOST'] ?? ''));
+        $port = (int) app_setting('olt_snmp_port', ($_ENV['OLT_SNMP_PORT'] ?? 161));
+        $community = trim((string) app_setting('olt_snmp_community', ''));
+        if ($community === '') $community = (string) ($_ENV['OLT_SNMP_COMMUNITY'] ?? '');
         if ($host === '' || $community === '' || $port < 1 || $port > 65535) {
             return [];
         }
@@ -59,6 +124,16 @@ class Olt_snmp
         return $result;
     }
 
+    private function connection()
+    {
+        $host = trim((string) app_setting('olt_snmp_host', ''));
+        if ($host === '') $host = trim((string) ($_ENV['OLT_SNMP_HOST'] ?? ''));
+        $port = (int) app_setting('olt_snmp_port', ($_ENV['OLT_SNMP_PORT'] ?? 161));
+        $community = trim((string) app_setting('olt_snmp_community', ''));
+        if ($community === '') $community = (string) ($_ENV['OLT_SNMP_COMMUNITY'] ?? '');
+        return ($host !== '' && $community !== '' && $port > 0 && $port <= 65535) ? [$this->peerName($host, $port), $community] : null;
+    }
+
     public function normalizeName($name)
     {
         $name = strtoupper(trim((string) $name));
@@ -67,7 +142,9 @@ class Olt_snmp
 
     private function walk($host, $community, $oid)
     {
-        $version = ltrim(strtolower(trim(isset($_ENV['OLT_SNMP_VERSION']) ? $_ENV['OLT_SNMP_VERSION'] : '1')), 'v');
+        $version = trim((string) app_setting('olt_snmp_version', ''));
+        if ($version === '') $version = (string) ($_ENV['OLT_SNMP_VERSION'] ?? '1');
+        $version = ltrim(strtolower(trim($version ?: '1')), 'v');
         if ($version === '2' || $version === '2c') {
             return @snmp2_real_walk($host, $community, $oid, 3000000, 1);
         }
@@ -80,7 +157,7 @@ class Olt_snmp
             return $host;
         }
 
-        return 'udp:' . $host . ':' . (int) $port;
+        return $host . ':' . (int) $port;
     }
 
     private function stringValue($value)

@@ -125,6 +125,58 @@
         });
     });
 
+    document.querySelectorAll('.customer-isolation-action').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const restoring = button.dataset.mode === 'restore';
+            const customerName = button.dataset.customerName || 'pelanggan';
+            const question = restoring
+                ? 'Pulihkan ' + customerName + ' ke profile paket dan putus sesi isolir?'
+                : 'Uji isolir ' + customerName + '? Profile akan diubah ke ISOLIR dan sesi aktif diputus.';
+            AppAlert.confirm(question, {
+                icon: restoring ? 'question' : 'warning',
+                confirmButtonText: restoring ? 'Ya, pulihkan' : 'Ya, isolir'
+            }).then(function (result) {
+                if (!result.isConfirmed) return;
+                const formData = new FormData(); formData.append('customer_id', button.dataset.customerId);
+                button.disabled = true;
+                if (window.AppLoader) window.AppLoader.show();
+                fetch(button.dataset.url, { method: 'POST', body: formData, credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        return AppAlert.notify(data.message || 'Proses isolir selesai.', data.success ? 'success' : 'error').then(function () { if (data.success) window.location.reload(); });
+                    })
+                    .catch(function () { AppAlert.notify('Tidak dapat memproses action isolir.', 'error'); })
+                    .finally(function () { button.disabled = false; if (window.AppLoader) window.AppLoader.hide(0); });
+            });
+        });
+    });
+
+    document.querySelectorAll('.customer-remote-ont').forEach(function (button) {
+        button.addEventListener('click', function () {
+            const remoteWindow = window.open('about:blank', '_blank');
+            if (remoteWindow) {
+                remoteWindow.opener = null;
+                remoteWindow.document.write('<title>Menyiapkan Remote ONT</title><p style="font-family:Arial;padding:24px">Menyiapkan NAT Forward-ONT...</p>');
+            }
+            const formData = new FormData();
+            formData.append('customer_id', button.dataset.customerId);
+            button.disabled = true;
+            fetch(button.dataset.url, { method: 'POST', body: formData, credentials: 'same-origin', headers: { Accept: 'application/json' } })
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    if (!data.success || !data.remote || !data.remote.url) throw new Error(data.message || 'Remote ONT gagal disiapkan.');
+                    if (remoteWindow) remoteWindow.location.replace(data.remote.url);
+                    else window.open(data.remote.url, '_blank', 'noopener');
+                    return AppAlert.notify(data.message || 'NAT Forward-ONT berhasil diperbarui.', 'success');
+                })
+                .catch(function (error) {
+                    if (remoteWindow) remoteWindow.close();
+                    AppAlert.notify(error.message || 'Gagal menyiapkan remote ONT.', 'error');
+                })
+                .finally(function () { button.disabled = false; });
+        });
+    });
+
     document.querySelectorAll('.customer-copy-secret').forEach(function (button) {
         button.addEventListener('click', function () {
             const value = button.dataset.copy || '';
@@ -134,19 +186,41 @@
     });
 
     const detailModal = document.getElementById('customerDetailModal');
-    const detailTitle = document.getElementById('customerDetailTitle');
     const detailKtpButton = document.querySelector('[data-detail-ktp]');
+    const detailWhatsapp = document.querySelector('[data-detail-whatsapp]');
+    const detailMapButton = document.querySelector('[data-customer-map-popup]');
+    const customerAppShell = detailModal ? detailModal.closest('.app-shell') : null;
+    let customerDetailBackdrop = null;
+    let customerMapModal = null;
+    let detailMapData = null;
+
+    function whatsappNumber(value) {
+        let number = String(value || '').replace(/\D/g, '');
+        if (number.indexOf('0') === 0) number = '62' + number.substring(1);
+        else if (number.indexOf('8') === 0) number = '62' + number;
+        return number;
+    }
+
+    function closeCustomerMap() {
+        if (!customerMapModal) return;
+        customerMapModal.remove();
+        customerMapModal = null;
+    }
 
     function closeCustomerDetail() {
         if (!detailModal) return;
+        closeCustomerMap();
         detailModal.classList.remove('is-open');
         detailModal.setAttribute('aria-hidden', 'true');
-        document.body.style.overflow = '';
+        if (customerDetailBackdrop) customerDetailBackdrop.remove();
+        customerDetailBackdrop = null;
+        document.body.classList.remove('pppoe-modal-open');
+        if (customerAppShell) customerAppShell.inert = false;
     }
 
     function openCustomerDetail(card) {
         if (!detailModal || !card) return;
-        if (detailTitle) detailTitle.textContent = card.dataset.name || '-';
+        if (detailModal.classList.contains('is-open')) closeCustomerDetail();
         detailModal.querySelectorAll('[data-detail]').forEach(function (field) {
             field.textContent = card.dataset[field.dataset.detail] || '-';
         });
@@ -158,9 +232,31 @@
             detailKtpButton.dataset.ktpName = card.dataset.name || 'Pelanggan';
             detailKtpButton.disabled = !card.dataset.ktpSrc;
         }
+        if (detailWhatsapp) {
+            const phone = whatsappNumber(card.dataset.phone);
+            const validPhone = /^62\d{8,13}$/.test(phone);
+            detailWhatsapp.href = validPhone ? 'https://wa.me/' + phone : '#';
+            detailWhatsapp.classList.toggle('is-disabled', !validPhone);
+            detailWhatsapp.setAttribute('aria-disabled', validPhone ? 'false' : 'true');
+        }
+        const latitude = Number(card.dataset.latitude);
+        const longitude = Number(card.dataset.longitude);
+        detailMapData = Number.isFinite(latitude) && Number.isFinite(longitude) && (latitude !== 0 || longitude !== 0)
+            ? { latitude: latitude, longitude: longitude, name: card.dataset.name || 'Pelanggan' }
+            : null;
+        if (detailMapButton) {
+            detailMapButton.disabled = !detailMapData;
+            detailMapButton.classList.toggle('is-disabled', !detailMapData);
+        }
+        customerDetailBackdrop = document.createElement('div');
+        customerDetailBackdrop.className = 'pppoe-modal-backdrop';
+        customerDetailBackdrop.addEventListener('click', closeCustomerDetail);
+        document.body.appendChild(customerDetailBackdrop);
+        document.body.appendChild(detailModal);
         detailModal.classList.add('is-open');
         detailModal.setAttribute('aria-hidden', 'false');
-        document.body.style.overflow = 'hidden';
+        document.body.classList.add('pppoe-modal-open');
+        if (customerAppShell) customerAppShell.inert = true;
     }
 
     document.querySelectorAll('[data-customer-detail]').forEach(function (card) {
@@ -175,7 +271,50 @@
         });
     });
     document.querySelectorAll('[data-customer-detail-close]').forEach(function (button) { button.addEventListener('click', closeCustomerDetail); });
-    document.querySelectorAll('[data-customer-action-menu]').forEach(function (menu) { menu.addEventListener('click', function (event) { event.stopPropagation(); }); });
+    if (detailWhatsapp) detailWhatsapp.addEventListener('click', function (event) { if (detailWhatsapp.classList.contains('is-disabled')) event.preventDefault(); });
+    if (detailMapButton) detailMapButton.addEventListener('click', function () {
+        if (!detailMapData) return;
+        closeCustomerMap();
+        const coordinates = detailMapData.latitude + ',' + detailMapData.longitude;
+        const query = encodeURIComponent(coordinates);
+        const mapsUrl = 'https://www.google.com/maps/search/?api=1&query=' + query;
+        customerMapModal = document.createElement('div');
+        customerMapModal.className = 'pppoe-map-modal';
+        customerMapModal.innerHTML = '<div class="pppoe-map-modal-backdrop" data-customer-map-close></div><section class="pppoe-map-modal-panel" role="dialog" aria-modal="true" aria-label="Lokasi pelanggan"><header><div><small>Lokasi Pelanggan</small><strong></strong></div><button type="button" data-customer-map-close aria-label="Tutup peta"><i class="fa-solid fa-xmark"></i></button></header><iframe title="Peta lokasi pelanggan" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe><footer><span><i class="fa-solid fa-location-crosshairs"></i></span><a target="_blank" rel="noopener noreferrer"><i class="fa-solid fa-diamond-turn-right"></i>Buka di Maps</a></footer></section>';
+        customerMapModal.querySelector('header strong').textContent = detailMapData.name;
+        customerMapModal.querySelector('iframe').src = 'https://maps.google.com/maps?q=' + query + '&z=18&output=embed';
+        customerMapModal.querySelector('footer span').appendChild(document.createTextNode(coordinates));
+        customerMapModal.querySelector('footer a').href = mapsUrl;
+        customerMapModal.querySelectorAll('[data-customer-map-close]').forEach(function (button) { button.addEventListener('click', closeCustomerMap); });
+        document.body.appendChild(customerMapModal);
+        requestAnimationFrame(function () { if (customerMapModal) customerMapModal.classList.add('is-open'); });
+    });
+    const customerActionMenus = Array.from(document.querySelectorAll('[data-customer-action-menu]'));
+    function closeCustomerActionMenu(menu) {
+        if (!menu) return;
+        menu.removeAttribute('open');
+        const card = menu.closest('.customer-profile-card');
+        if (card) card.classList.remove('has-open-action');
+    }
+    function closeCustomerActionMenus(except) {
+        customerActionMenus.forEach(function (menu) { if (menu !== except) closeCustomerActionMenu(menu); });
+    }
+    customerActionMenus.forEach(function (menu) {
+        menu.addEventListener('toggle', function () {
+            const card = menu.closest('.customer-profile-card');
+            if (menu.open) {
+                closeCustomerActionMenus(menu);
+                if (card) card.classList.add('has-open-action');
+            } else if (card) card.classList.remove('has-open-action');
+        });
+        menu.addEventListener('click', function (event) {
+            event.stopPropagation();
+            if (event.target.closest('.customer-action-item')) setTimeout(function () { closeCustomerActionMenu(menu); }, 0);
+        });
+    });
+    document.addEventListener('click', function (event) {
+        if (!event.target.closest('[data-customer-action-menu]')) closeCustomerActionMenus();
+    });
 
     const modal = document.getElementById('ktpModal');
     const modalImage = document.getElementById('ktpModalImage');
@@ -198,6 +337,7 @@
         if (!detailKtpButton.dataset.ktpSrc) return;
         modalImage.src = detailKtpButton.dataset.ktpSrc;
         modalTitle.textContent = 'Foto KTP - ' + (detailKtpButton.dataset.ktpName || 'Pelanggan');
+        document.body.appendChild(modal);
         modal.classList.add('is-open');
         modal.setAttribute('aria-hidden', 'false');
     });
@@ -211,12 +351,14 @@
     });
 
     document.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape' && modal.classList.contains('is-open')) {
+        if (event.key !== 'Escape') return;
+        closeCustomerActionMenus();
+        if (modal.classList.contains('is-open')) {
             modal.classList.remove('is-open');
             modal.setAttribute('aria-hidden', 'true');
             modalImage.src = '';
-        }
-        if (event.key === 'Escape' && detailModal && detailModal.classList.contains('is-open')) closeCustomerDetail();
+        } else if (customerMapModal && customerMapModal.classList.contains('is-open')) closeCustomerMap();
+        else if (detailModal && detailModal.classList.contains('is-open')) closeCustomerDetail();
     });
 
     const paymentModal = document.getElementById('paymentModal');

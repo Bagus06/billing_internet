@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') or exit('No direct script access allowed');
 
-class Router_model extends CI_Model
+class Router_model extends MY_Model
 {
     private $table = 'mikrotik_routers';
     private $prefix = 'enc:';

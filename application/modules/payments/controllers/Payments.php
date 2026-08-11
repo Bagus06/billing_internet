@@ -11,6 +11,7 @@ class Payments extends MY_Controller
         parent::__construct();
         $this->load->model('payments/payment_model');
         $this->load->model('customers/customer_model');
+        $this->load->library('Customer_isolation');
     }
 
     public function index()
@@ -24,7 +25,7 @@ class Payments extends MY_Controller
         $offset = ($page - 1) * $perPage;
 
         $this->render('index', [
-            'title' => 'Data Pembayaran - ISP BATARA NET',
+            'title' => 'Data Pembayaran - ' . app_setting('isp_name', 'ISP Billing'),
             'payments' => $this->payment_model->get_paginated($filters, $perPage, $offset),
             'filters' => $filters,
             'page' => $page,
@@ -72,9 +73,16 @@ class Payments extends MY_Controller
             'input_date' => date('Y-m-d'),
         ]);
 
-        $this->session->set_flashdata($saved ? 'success' : 'error', $saved
+        $message = $saved
             ? 'Pembayaran berhasil disimpan sebagai ' . $paymentType . ($isFirstPayment ? ' karena merupakan pembayaran pertama pelanggan.' : ' karena pelanggan sudah memiliki riwayat pembayaran sebelumnya.')
-            : 'Pembayaran gagal disimpan.');
+            : 'Pembayaran gagal disimpan.';
+        $flashType = $saved ? 'success' : 'error';
+        if ($saved && !empty($customer['is_isolated'])) {
+            $restore = $this->customer_isolation->restoreCustomer((int) $customer['id'], 'payment');
+            $message .= ' ' . $restore['message'];
+            if (!$restore['success']) $flashType = 'error';
+        }
+        $this->session->set_flashdata($flashType, $message);
 
         redirect($this->input->post('redirect_to') ?: 'customers');
     }

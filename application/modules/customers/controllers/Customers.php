@@ -12,6 +12,9 @@ class Customers extends MY_Controller
         $this->load->model('routers/router_model');
         $this->load->library('Mikrotik_sync');
         $this->load->library('Mikrotik_query');
+        $this->load->library('Customer_isolation');
+        $this->load->library('App_storage');
+        $this->load->library('Olt_snmp');
     }
 
     public function index()
@@ -24,9 +27,10 @@ class Customers extends MY_Controller
         $page = min($page, $totalPages);
         $offset = ($page - 1) * $perPage;
 
+        $customers = $this->customer_model->get_paginated($filters, $perPage, $offset);
         $this->render('index', [
-            'title' => 'Data Pelanggan - ISP BATARA NET',
-            'customers' => $this->customer_model->get_paginated($filters, $perPage, $offset),
+            'title' => 'Data Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
+            'customers' => $this->withArrears($customers),
             'filters' => $filters,
             'page' => $page,
             'per_page' => $perPage,
@@ -38,11 +42,13 @@ class Customers extends MY_Controller
     public function create()
     {
         $this->render('form', [
-            'title' => 'Tambah Pelanggan - ISP BATARA NET',
+            'title' => 'Tambah Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => 'create',
             'customer' => $this->blankCustomer(),
             'packages' => $this->package_model->get_all(true),
             'action' => site_url('customers/store'),
+            'ont_devices' => $this->olt_snmp->devices(),
+            'ont_pairing' => null,
         ]);
     }
 
@@ -52,6 +58,8 @@ class Customers extends MY_Controller
         catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', $e->getMessage()); redirect('customers/create'); return; }
         $id = $this->customer_model->insert($payload);
         if ($id) {
+            try { $this->saveOntPairing($id); }
+            catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', 'Pelanggan tersimpan, tetapi pairing ONT gagal: ' . $e->getMessage()); redirect('customers/edit/' . $id); return; }
             $sync = $this->mikrotik_sync->syncCustomer($id);
             $this->setSyncFlash('Pelanggan berhasil ditambahkan.', $sync);
         }
@@ -68,11 +76,13 @@ class Customers extends MY_Controller
         }
 
         $this->render('form', [
-            'title' => 'Edit Pelanggan - ISP BATARA NET',
+            'title' => 'Edit Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => 'edit',
             'customer' => $customer,
             'packages' => $this->package_model->get_all(true),
             'action' => site_url('customers/update/' . $id),
+            'ont_devices' => $this->olt_snmp->devices(),
+            'ont_pairing' => $this->customer_model->ont_pairing($id),
         ]);
     }
 
@@ -80,9 +90,11 @@ class Customers extends MY_Controller
     {
         $customer = $this->customer_model->find($id);
         if (!$customer) { show_404(); return; }
-        try { $payload = $this->payload($customer['customer_status']); }
+        try { $payload = $this->payload($customer['customer_status'], $customer); }
         catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', $e->getMessage()); redirect('customers/edit/' . $id); return; }
         $this->customer_model->update($id, $payload);
+        try { $this->saveOntPairing($id); }
+        catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', $e->getMessage()); redirect('customers/edit/' . $id); return; }
         $sync = $this->mikrotik_sync->syncCustomer($id);
         $this->setSyncFlash('Pelanggan berhasil diperbarui.', $sync);
         redirect('customers');
@@ -90,8 +102,46 @@ class Customers extends MY_Controller
 
     public function delete($id)
     {
-        $this->customer_model->delete($id);
+        $customer = $this->customer_model->find($id);
+        if (!$customer) { show_404(); return; }
+        $dependencies = $this->customer_model->deletion_dependencies($id);
+        if ($dependencies['total'] > 0) {
+            $details = [];
+            if ($dependencies['payments']) $details[] = $dependencies['payments'] . ' pembayaran';
+            if ($dependencies['status_history']) $details[] = $dependencies['status_history'] . ' histori status';
+            if ($dependencies['isolation_logs']) $details[] = $dependencies['isolation_logs'] . ' log isolir';
+            $this->session->set_flashdata('error', 'Pelanggan tidak dapat dihapus karena memiliki ' . implode(', ', $details) . '. Nonaktifkan pelanggan untuk mempertahankan histori billing.');
+            redirect('customers');
+            return;
+        }
+        if (!$this->customer_model->delete($id)) {
+            $this->session->set_flashdata('error', 'Pelanggan gagal dihapus. Data billing tetap aman.');
+            redirect('customers');
+            return;
+        }
+        $this->session->set_flashdata('success', 'Pelanggan berhasil dihapus.');
         redirect('customers');
+    }
+
+    public function ktp($id)
+    {
+        $customer = $this->customer_model->find((int) $id);
+        if (!$customer || empty($customer['ktp_photo'])) { show_404(); return; }
+        try {
+            $path = $this->app_storage->resolvePrivate($customer['ktp_photo']);
+        } catch (Throwable $e) {
+            show_404();
+            return;
+        }
+        $mime = function_exists('mime_content_type') ? mime_content_type($path) : 'application/octet-stream';
+        if (!in_array($mime, ['image/jpeg','image/png','image/webp'], true)) { show_404(); return; }
+        $this->output
+            ->set_header('Cache-Control: private, no-store, max-age=0')
+            ->set_header('Pragma: no-cache')
+            ->set_header('X-Content-Type-Options: nosniff')
+            ->set_header('Content-Disposition: inline; filename="ktp-' . (int) $customer['id'] . '.' . pathinfo($path, PATHINFO_EXTENSION) . '"')
+            ->set_content_type($mime)
+            ->set_output(file_get_contents($path));
     }
 
     protected function render($view, array $data = [])
@@ -100,7 +150,7 @@ class Customers extends MY_Controller
         parent::render($view, $data);
     }
 
-    private function payload($status)
+    private function payload($status, array $existingCustomer = [])
     {
         $nik = preg_replace('/\D+/', '', (string) $this->input->post('nik', true));
         $name = trim((string) $this->input->post('name', true));
@@ -111,8 +161,15 @@ class Customers extends MY_Controller
         if (!preg_match('/^\d{16}$/', $nik)) throw new InvalidArgumentException('NIK wajib terdiri dari tepat 16 digit.');
         if (!preg_match('/^62\d{8,13}$/', $phone)) throw new InvalidArgumentException('Nomor telepon tidak valid. Gunakan nomor Indonesia aktif, contoh 081234567890.');
         if (!$package) throw new InvalidArgumentException('Paket internet wajib dipilih.');
-        $ktpPhoto = $this->uploadKtpPhoto();
+        $ktpPhoto = $this->uploadKtpPhoto(isset($existingCustomer['ktp_photo']) ? $existingCustomer['ktp_photo'] : '');
         $psbDate = $this->input->post('psb_date') ?: null;
+        $latitudeInput = trim((string) $this->input->post('latitude', true));
+        $longitudeInput = trim((string) $this->input->post('longitude', true));
+        if (($latitudeInput === '') xor ($longitudeInput === '')) throw new InvalidArgumentException('Latitude dan longitude harus dipilih bersamaan dari peta.');
+        $latitude = $latitudeInput === '' ? null : filter_var($latitudeInput, FILTER_VALIDATE_FLOAT);
+        $longitude = $longitudeInput === '' ? null : filter_var($longitudeInput, FILTER_VALIDATE_FLOAT);
+        if ($latitudeInput !== '' && ($latitude === false || $latitude < -90 || $latitude > 90)) throw new InvalidArgumentException('Nilai latitude tidak valid. Pilih ulang titik pada peta.');
+        if ($longitudeInput !== '' && ($longitude === false || $longitude < -180 || $longitude > 180)) throw new InvalidArgumentException('Nilai longitude tidak valid. Pilih ulang titik pada peta.');
 
         return [
             'customer_code' => $this->generateCustomerCode($nik),
@@ -121,6 +178,8 @@ class Customers extends MY_Controller
             'nik' => $nik,
             'ktp_photo' => $ktpPhoto,
             'address' => trim($this->input->post('address', true)),
+            'latitude' => $latitude === null ? null : number_format((float) $latitude, 7, '.', ''),
+            'longitude' => $longitude === null ? null : number_format((float) $longitude, 7, '.', ''),
             'package_id' => $package ? (int) $package['id'] : null,
             'package_name' => $package ? $package['package_name'] : '',
             'price' => $package ? (float) $package['price'] : 0,
@@ -139,6 +198,62 @@ class Customers extends MY_Controller
         elseif (strpos($digits, '0') === 0) $digits = '62' . substr($digits, 1);
         elseif (strpos($digits, '8') === 0) $digits = '62' . $digits;
         return $digits;
+    }
+
+    private function withArrears(array $customers)
+    {
+        if (!$customers) return $customers;
+        $paid = [];
+        foreach ($this->customer_model->payment_periods_for_customers($customers) as $row) {
+            $period = sprintf('%04d-%02d', (int) $row['bill_year'], (int) $row['bill_month']);
+            if (!empty($row['customer_id'])) $paid['id:' . (int) $row['customer_id']][$period] = true;
+            if (!empty($row['customer_code'])) $paid['code:' . $row['customer_code']][$period] = true;
+        }
+        $today = new DateTimeImmutable('today');
+        foreach ($customers as &$customer) {
+            $customer['arrears_count'] = 0; $customer['arrears_amount'] = 0; $customer['arrears_periods'] = '';
+            if (strtoupper((string) $customer['customer_status']) === 'LEAD') continue;
+            $startValue = !empty($customer['psb_date']) ? $customer['psb_date'] : ($customer['created_at'] ?? '');
+            try { $start = (new DateTimeImmutable($startValue ?: 'now'))->modify('first day of this month'); }
+            catch (Throwable $e) { continue; }
+            $deadline = $this->billingDeadline($customer, $today);
+            $lastDue = $today >= $deadline ? $today->modify('first day of this month') : $today->modify('first day of previous month');
+            if ($start > $lastDue) continue;
+            $missing = []; $cursor = $start; $guard = 0;
+            while ($cursor <= $lastDue && $guard++ < 240) {
+                $period = $cursor->format('Y-m');
+                $isPaid = !empty($paid['id:' . (int) $customer['id']][$period]) || !empty($paid['code:' . $customer['customer_code']][$period]);
+                if (!$isPaid) $missing[] = $period;
+                $cursor = $cursor->modify('+1 month');
+            }
+            $customer['arrears_count'] = count($missing);
+            $customer['arrears_amount'] = count($missing) * (float) $customer['price'];
+            $customer['arrears_periods'] = implode(', ', array_map(function ($period) {
+                $date = DateTimeImmutable::createFromFormat('!Y-m', $period);
+                return $date ? $date->format('m/Y') : $period;
+            }, $missing));
+        }
+        unset($customer);
+        return $customers;
+    }
+
+    private function billingDeadline(array $customer, DateTimeImmutable $month)
+    {
+        $groupTwo = preg_match('/(?:^|\D)2(?:\D|$)/', strtolower((string) $customer['group_name'])) === 1;
+        $dueDay = $groupTwo ? (int) app_setting('isolation_group_2_due_day', 25) : (int) app_setting('isolation_group_1_due_day', 10);
+        $grace = max(0, (int) app_setting('isolation_grace_days', 5));
+        $dueDay = max(1, min((int) $month->format('t'), $dueDay));
+        return $month->setDate((int) $month->format('Y'), (int) $month->format('n'), $dueDay)->modify('+' . $grace . ' days');
+    }
+
+    private function saveOntPairing($customerId)
+    {
+        $serial = strtoupper(trim((string) $this->input->post('ont_serial_number', true)));
+        if ($serial === '') { $this->customer_model->save_ont_pairing($customerId, null); return; }
+        foreach ($this->olt_snmp->devices() as $device) {
+            if (strtoupper($device['serial_number']) === $serial) { $this->customer_model->save_ont_pairing($customerId, $device); return; }
+        }
+        throw new InvalidArgumentException('ONT tidak ditemukan pada hasil discovery OLT. Muat ulang form lalu pilih kembali ONT.');
     }
 
     private function normalizePrice($value)
@@ -189,32 +304,12 @@ class Customers extends MY_Controller
         return 'BTN-' . $suffix;
     }
 
-    private function uploadKtpPhoto()
+    private function uploadKtpPhoto($existing = '')
     {
-        $existing = trim($this->input->post('existing_ktp_photo', true));
-
         if (empty($_FILES['ktp_photo']['name'])) {
-            return $existing;
+            return trim((string) $existing);
         }
-
-        $uploadPath = FCPATH . 'assets/img/ktp/';
-
-        if (!is_dir($uploadPath)) {
-            mkdir($uploadPath, 0755, true);
-        }
-
-        $this->load->library('upload', [
-            'upload_path' => $uploadPath,
-            'allowed_types' => 'jpg|jpeg|png|webp',
-            'max_size' => 4096,
-            'encrypt_name' => true,
-        ]);
-
-        if (!$this->upload->do_upload('ktp_photo')) {
-            return $existing;
-        }
-
-        return 'assets/img/ktp/' . $this->upload->data('file_name');
+        return $this->app_storage->storePrivateImage('ktp_photo', 'customers/ktp', 4096);
     }
 
     private function blankCustomer()
@@ -227,6 +322,8 @@ class Customers extends MY_Controller
             'ktp_photo' => '',
             'package_id' => '',
             'address' => '',
+            'latitude' => null,
+            'longitude' => null,
             'package_name' => '',
             'price' => 0,
             'psb_date' => date('Y-m-d'),
@@ -302,6 +399,44 @@ class Customers extends MY_Controller
         } catch (Throwable $e) { $this->json(false, $e->getMessage()); }
     }
 
+    public function isolate()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        if (!$this->db->field_exists('is_isolated', 'customers')) { $this->json(false, 'Jalankan file SQL sistem isolir terlebih dahulu.'); return; }
+        $result = $this->customer_isolation->isolateCustomer((int) $this->input->post('customer_id'), 'manual');
+        $this->json(!empty($result['success']), isset($result['message']) ? $result['message'] : 'Proses isolir selesai.', $result);
+    }
+
+    public function restore_isolation()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        if (!$this->db->field_exists('is_isolated', 'customers')) { $this->json(false, 'Jalankan file SQL sistem isolir terlebih dahulu.'); return; }
+        $result = $this->customer_isolation->restoreCustomer((int) $this->input->post('customer_id'), 'manual');
+        $this->json(!empty($result['success']), isset($result['message']) ? $result['message'] : 'Pemulihan isolir selesai.', $result);
+    }
+
+    public function remote_ont()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        $customer = $this->customer_model->find((int) $this->input->post('customer_id'));
+        if (!$customer) { $this->json(false, 'Pelanggan tidak ditemukan.'); return; }
+        $package = $this->package_model->find((int) $customer['package_id']);
+        if (!$package && !empty($customer['package_name'])) $package = $this->package_model->find_by_name($customer['package_name']);
+        if (!$package || empty($package['router_id'])) { $this->json(false, 'Paket pelanggan belum memiliki relasi router.'); return; }
+        $router = $this->router_model->find((int) $package['router_id']);
+        if (!$router || empty($router['is_active'])) { $this->json(false, 'Router pelanggan tidak tersedia atau nonaktif.'); return; }
+        $nik = preg_replace('/\D+/', '', (string) $customer['nik']);
+        if ($nik === '') { $this->json(false, 'NIK pelanggan kosong sehingga username PPPoE tidak dapat dibentuk.'); return; }
+        $username = $nik . app_setting('pppoe_username_suffix', '@BATARA.net');
+        $router['ssl'] = !empty($router['use_ssl']);
+        try {
+            $remote = $this->mikrotik_query->prepareOntRemote($router, $username);
+            $this->json(true, 'NAT Forward-ONT diarahkan ke ' . $remote['local_ip'] . '.', ['remote' => $remote]);
+        } catch (Throwable $e) {
+            $this->json(false, $e->getMessage());
+        }
+    }
+
     public function import_spreadsheet()
     {
         if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
@@ -323,8 +458,8 @@ class Customers extends MY_Controller
         if (!$sync['success']) $this->session->set_flashdata('error', 'Sinkronisasi MikroTik: ' . implode(' | ', $sync['errors']));
     }
 
-    private function json($success, $message)
+    private function json($success, $message, array $extra = [])
     {
-        $this->output->set_content_type('application/json')->set_output(json_encode(['success' => (bool) $success, 'message' => $message]));
+        $this->output->set_content_type('application/json')->set_output(json_encode(array_merge(['success' => (bool) $success, 'message' => $message], $extra)));
     }
 }

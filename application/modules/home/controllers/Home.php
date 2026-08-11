@@ -7,7 +7,7 @@ class Home extends MY_Controller
     public function index()
     {
         $data = [
-            'title' => 'ISP BATARA NET',
+            'title' => app_setting('isp_name', 'ISP BATARA NET'),
             'body_class' => '',
         ];
 

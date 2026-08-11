@@ -8,6 +8,8 @@ class Routers extends MY_Controller
     {
         parent::__construct();
         $this->load->model('routers/router_model');
+        $this->load->model('packages/package_model');
+        $this->load->library('Mikrotik_query');
     }
 
     public function index()
@@ -15,7 +17,7 @@ class Routers extends MY_Controller
         $this->router_model->encrypt_existing_plain_passwords();
 
         $this->render('index', [
-            'title' => 'Data Mikrotik - ISP BATARA NET',
+            'title' => 'Data Mikrotik - ' . app_setting('isp_name', 'ISP Billing'),
             'routers' => $this->router_model->get_all(),
         ]);
     }
@@ -23,7 +25,7 @@ class Routers extends MY_Controller
     public function create()
     {
         $this->render('form', [
-            'title' => 'Tambah Mikrotik - ISP BATARA NET',
+            'title' => 'Tambah Mikrotik - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => 'create',
             'router' => $this->blankRouter(),
             'action' => site_url('routers/store'),
@@ -46,7 +48,7 @@ class Routers extends MY_Controller
         }
 
         $this->render('form', [
-            'title' => 'Edit Mikrotik - ISP BATARA NET',
+            'title' => 'Edit Mikrotik - ' . app_setting('isp_name', 'ISP Billing'),
             'mode' => 'edit',
             'router' => $router,
             'action' => site_url('routers/update/' . $id),
@@ -67,7 +69,20 @@ class Routers extends MY_Controller
 
     public function delete($id)
     {
-        $this->router_model->delete($id);
+        $router = $this->router_model->find($id);
+        if (!$router) { show_404(); return; }
+        $packageCount = $this->package_model->count_by_router($id);
+        if ($packageCount > 0) {
+            $this->session->set_flashdata('error', 'Router tidak dapat dihapus karena masih digunakan oleh ' . $packageCount . ' paket internet. Pindahkan paket ke router lain terlebih dahulu.');
+            redirect('routers');
+            return;
+        }
+        if (!$this->router_model->delete($id)) {
+            $this->session->set_flashdata('error', 'Router gagal dihapus. Konfigurasi jaringan tetap dipertahankan.');
+            redirect('routers');
+            return;
+        }
+        $this->session->set_flashdata('success', 'Router berhasil dihapus dari aplikasi. Konfigurasi fisik MikroTik tidak diubah.');
         redirect('routers');
     }
 
@@ -75,6 +90,48 @@ class Routers extends MY_Controller
     {
         $data['body_class'] = 'monitoring-page';
         parent::render($view, $data);
+    }
+
+    public function status($id)
+    {
+        $router = $this->router_model->find($id);
+        if (!$router) { show_404(); return; }
+
+        $device = ['resource' => [], 'identity' => [], 'routerboard' => [], 'health' => [], 'interfaces' => [], 'files' => [], 'active_sessions' => 0, 'total_secrets' => 0];
+        $error = null;
+        try {
+            $device = $this->mikrotik_query->run($router, function ($api) {
+                $resource = $api->getResource();
+                $identity = $this->firstApiRow($api->comm('/system/identity/print'));
+                $routerboard = $this->firstApiRow($api->comm('/system/routerboard/print'));
+                $health = $this->firstApiRow($api->comm('/system/health/print'));
+                $interfaces = $this->cleanApiRows($api->getInterfaceStats());
+                $files = $this->cleanApiRows($api->comm('/file/print'));
+                $sessions = $this->cleanApiRows($api->getActiveSessions());
+                $secrets = $this->cleanApiRows($api->getPppSecrets());
+                return ['resource' => is_array($resource) ? $resource : [], 'identity' => $identity, 'routerboard' => $routerboard, 'health' => $health, 'interfaces' => $interfaces, 'files' => $files, 'active_sessions' => count($sessions), 'total_secrets' => count($secrets)];
+            });
+        } catch (Throwable $e) { $error = $e->getMessage(); }
+
+        $this->render('status', ['title' => 'Status Perangkat - ' . $router['name'], 'router' => $router, 'device' => $device, 'connection_error' => $error]);
+    }
+
+    public function status_data($id)
+    {
+        $router = $this->router_model->find($id);
+        if (!$router) { $this->statusJson(['success' => false, 'message' => 'Router tidak ditemukan.'], 404); return; }
+        try {
+            $data = $this->mikrotik_query->run($router, function ($api) {
+                $resource = $api->getResource();
+                $health = $this->firstApiRow($api->comm('/system/health/print'));
+                $interfaces = $this->cleanApiRows($api->getInterfaceStats());
+                $sessions = $this->cleanApiRows($api->getActiveSessions());
+                $running = 0; $enabled = 0;
+                foreach ($interfaces as $interface) { if (($interface['disabled'] ?? 'false') !== 'true') $enabled++; if (($interface['running'] ?? 'false') === 'true') $running++; }
+                return ['resource' => is_array($resource) ? $resource : [], 'health' => $health, 'running_interfaces' => $running, 'enabled_interfaces' => $enabled, 'active_sessions' => count($sessions)];
+            });
+            $this->statusJson(['success' => true, 'data' => $data, 'checked_at' => date('H:i:s')]);
+        } catch (Throwable $e) { $this->statusJson(['success' => false, 'message' => $e->getMessage(), 'checked_at' => date('H:i:s')], 503); }
     }
 
     private function payload()
@@ -103,5 +160,21 @@ class Routers extends MY_Controller
             'timeout' => 5,
             'is_active' => 1,
         ];
+    }
+
+    private function cleanApiRows(array $rows)
+    {
+        return array_values(array_filter($rows, function ($row) { return is_array($row) && !isset($row['!done']) && !isset($row['!trap']) && !isset($row['!fatal']); }));
+    }
+
+    private function firstApiRow(array $rows)
+    {
+        $rows = $this->cleanApiRows($rows);
+        return $rows ? $rows[0] : [];
+    }
+
+    private function statusJson(array $payload, $status = 200)
+    {
+        $this->output->set_status_header($status)->set_content_type('application/json')->set_output(json_encode($payload));
     }
 }
