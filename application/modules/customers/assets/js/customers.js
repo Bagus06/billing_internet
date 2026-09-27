@@ -194,10 +194,7 @@
                 })
                     .then(function (response) { return response.json(); })
                     .then(function (data) {
-                        const details = Array.isArray(data.messages) && data.messages.length
-                            ? '<br><small>' + data.messages.map(function (message) { return String(message).replace(/[&<>"']/g, function (character) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character]; }); }).join('<br>') + '</small>'
-                            : '';
-                        return AppAlert.notify((data.message || 'Proses isolir selesai.') + details, data.success ? 'success' : 'error').then(function () {
+                        return AppAlert.notify(data.message || 'Proses isolir selesai.', data.success ? 'success' : 'error').then(function () {
                             window.location.reload();
                         });
                     })

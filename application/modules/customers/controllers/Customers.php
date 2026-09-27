@@ -423,7 +423,11 @@ class Customers extends MY_Controller
         $isolated = isset($result['isolated']) ? (int) $result['isolated'] : 0;
         $skipped = isset($result['skipped']) ? (int) $result['skipped'] : 0;
         $failed = isset($result['failed']) ? (int) $result['failed'] : 0;
-        $message = 'Proses isolir pelanggan jatuh tempo selesai: ' . $isolated . ' berhasil, ' . $failed . ' gagal, dan ' . $skipped . ' dilewati.';
+        if ($isolated === 0 && $failed === 0) {
+            $message = 'Tidak ada pelanggan jatuh tempo yang perlu diisolir saat ini.';
+        } else {
+            $message = 'Isolir pelanggan selesai. Berhasil: ' . $isolated . ', gagal: ' . $failed . ', dilewati: ' . $skipped . '.';
+        }
 
         $this->json($failed === 0, $message, $result);
     }
@@ -445,7 +449,11 @@ class Customers extends MY_Controller
         $restored = isset($result['restored']) ? (int) $result['restored'] : 0;
         $skipped = isset($result['skipped']) ? (int) $result['skipped'] : 0;
         $failed = isset($result['failed']) ? (int) $result['failed'] : 0;
-        $message = 'Pemulihan isolir massal selesai: ' . $restored . ' berhasil, ' . $failed . ' gagal, dan ' . $skipped . ' dilewati.';
+        if ($restored === 0 && $failed === 0) {
+            $message = 'Tidak ada pelanggan berstatus isolir yang perlu dipulihkan.';
+        } else {
+            $message = 'Pemulihan isolir selesai. Berhasil: ' . $restored . ', gagal: ' . $failed . ', dilewati: ' . $skipped . '.';
+        }
 
         $this->json($failed === 0, $message, $result);
     }
