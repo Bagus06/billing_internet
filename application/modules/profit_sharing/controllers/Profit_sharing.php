@@ -31,7 +31,8 @@ class Profit_sharing extends MY_Controller
     {
         $year = (int) $this->input->get('year') ?: (int) date('Y');
         $month = max(1, min(12, (int) $this->input->get('month') ?: (int) date('n')));
-        if (!$this->financial_report_model->month_detail($year, $month)) {
+        $payments = $this->financial_report_model->month_detail($year, $month);
+        if (!$payments) {
             show_error(app_language() === 'en' ? 'No payment data is available for the selected period.' : 'Tidak ada data pembayaran pada periode yang dipilih.', 404, app_language() === 'en' ? 'Report Not Available' : 'Laporan Tidak Tersedia');
             return;
         }
@@ -45,6 +46,8 @@ class Profit_sharing extends MY_Controller
             'year' => $year,
             'month' => $month,
             'rows' => [$selected],
+            'payments' => $payments,
+            'payment_total' => array_sum(array_map(function ($payment) { return (float) $payment['price']; }, $payments)),
             'totals' => ['net' => $selected['net'], 'party_1' => $selected['party_1'],
                 'party_2' => $selected['party_2'], 'reserve' => $selected['reserve']],
             'report_number' => sprintf('PS/%04d/%02d/%s', $year, $month, date('YmdHis')),
