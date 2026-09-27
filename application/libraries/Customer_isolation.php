@@ -17,6 +17,16 @@ class Customer_isolation
     public function run($source = 'cron', $date = null)
     {
         if (!$this->enabled()) return $this->result(0, 0, 0, ['Sistem isolir belum diaktifkan.']);
+        return $this->runDueCustomers($source, $date);
+    }
+
+    public function runManual($date = null)
+    {
+        return $this->runDueCustomers('manual_bulk', $date);
+    }
+
+    private function runDueCustomers($source, $date = null)
+    {
         $today = $date ? new DateTimeImmutable($date) : new DateTimeImmutable('today');
         $customers = $this->CI->customer_model->isolation_candidates((int) $today->format('n'), (int) $today->format('Y'));
         $isolated = 0; $skipped = 0; $failed = 0; $messages = [];
@@ -35,6 +45,32 @@ class Customer_isolation
         return $this->withCustomerLock((int) $customerId, function () use ($customerId, $source) {
             return $this->restoreUnlocked((int) $customerId, $source);
         });
+    }
+
+    public function restoreAllManual()
+    {
+        $customers = $this->CI->customer_model->isolation_restore_candidates();
+        $restored = 0; $skipped = 0; $failed = 0; $messages = [];
+
+        foreach ($customers as $customer) {
+            $outcome = $this->restoreCustomer((int) $customer['id'], 'manual_bulk');
+            if (!empty($outcome['success']) && !empty($outcome['changed'])) {
+                $restored++;
+            } elseif (!empty($outcome['success'])) {
+                $skipped++;
+            } else {
+                $failed++;
+            }
+            if (isset($outcome['message'])) $messages[] = $outcome['message'];
+        }
+
+        return [
+            'success' => $failed === 0,
+            'restored' => $restored,
+            'skipped' => $skipped,
+            'failed' => $failed,
+            'messages' => $messages,
+        ];
     }
 
     public function preview($date = null)

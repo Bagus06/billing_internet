@@ -36,6 +36,7 @@ class Customers extends MY_Controller
             'per_page' => $perPage,
             'total_rows' => $totalRows,
             'total_pages' => $totalPages,
+            'filter_options' => $this->customer_model->filter_options(),
         ]);
     }
 
@@ -277,6 +278,8 @@ class Customers extends MY_Controller
             'group_name',
             'customer_status',
             'payment_status',
+            'isolation_status',
+            'arrears_status',
             'promoter',
         ];
 
@@ -411,12 +414,40 @@ class Customers extends MY_Controller
         $this->json(!empty($result['success']), isset($result['message']) ? $result['message'] : 'Proses isolir selesai.', $result);
     }
 
+    public function isolate_due()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        if (!$this->db->field_exists('is_isolated', 'customers')) { $this->json(false, 'Jalankan migration sistem isolir terlebih dahulu.'); return; }
+
+        $result = $this->customer_isolation->runManual();
+        $isolated = isset($result['isolated']) ? (int) $result['isolated'] : 0;
+        $skipped = isset($result['skipped']) ? (int) $result['skipped'] : 0;
+        $failed = isset($result['failed']) ? (int) $result['failed'] : 0;
+        $message = 'Proses isolir pelanggan jatuh tempo selesai: ' . $isolated . ' berhasil, ' . $failed . ' gagal, dan ' . $skipped . ' dilewati.';
+
+        $this->json($failed === 0, $message, $result);
+    }
+
     public function restore_isolation()
     {
         if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
         if (!$this->db->field_exists('is_isolated', 'customers')) { $this->json(false, 'Jalankan file SQL sistem isolir terlebih dahulu.'); return; }
         $result = $this->customer_isolation->restoreCustomer((int) $this->input->post('customer_id'), 'manual');
         $this->json(!empty($result['success']), isset($result['message']) ? $result['message'] : 'Pemulihan isolir selesai.', $result);
+    }
+
+    public function restore_all_isolation()
+    {
+        if (strtoupper($this->input->method()) !== 'POST') { show_404(); return; }
+        if (!$this->db->field_exists('is_isolated', 'customers')) { $this->json(false, 'Jalankan migration sistem isolir terlebih dahulu.'); return; }
+
+        $result = $this->customer_isolation->restoreAllManual();
+        $restored = isset($result['restored']) ? (int) $result['restored'] : 0;
+        $skipped = isset($result['skipped']) ? (int) $result['skipped'] : 0;
+        $failed = isset($result['failed']) ? (int) $result['failed'] : 0;
+        $message = 'Pemulihan isolir massal selesai: ' . $restored . ' berhasil, ' . $failed . ' gagal, dan ' . $skipped . ' dilewati.';
+
+        $this->json($failed === 0, $message, $result);
     }
 
     public function remote_ont()

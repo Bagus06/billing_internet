@@ -21,6 +21,32 @@
         input.addEventListener('input', function () { input.value = input.value.toLocaleUpperCase('id-ID'); });
     });
 
+    const customerSearchModal = document.querySelector('[data-customer-search-modal]');
+    const customerSearchOpen = document.querySelector('[data-customer-search-open]');
+    if (customerSearchModal && customerSearchOpen) {
+        // Keep the fixed overlay relative to the viewport, not to an animated page container.
+        document.body.appendChild(customerSearchModal);
+        const closeCustomerSearch = function () {
+            customerSearchModal.classList.remove('is-open');
+            customerSearchModal.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('customer-search-open');
+            customerSearchOpen.focus();
+        };
+        customerSearchOpen.addEventListener('click', function () {
+            customerSearchModal.classList.add('is-open');
+            customerSearchModal.setAttribute('aria-hidden', 'false');
+            document.body.classList.add('customer-search-open');
+            const firstInput = customerSearchModal.querySelector('input:not([type="hidden"]),select');
+            if (firstInput) window.setTimeout(function () { firstInput.focus(); }, 80);
+        });
+        customerSearchModal.querySelectorAll('[data-customer-search-close]').forEach(function (button) {
+            button.addEventListener('click', closeCustomerSearch);
+        });
+        document.addEventListener('keydown', function (event) {
+            if (event.key === 'Escape' && customerSearchModal.classList.contains('is-open')) closeCustomerSearch();
+        });
+    }
+
     document.querySelectorAll('[data-phone-input]').forEach(function (input) {
         input.addEventListener('blur', function () {
             let digits = input.value.replace(/\D/g, '');
@@ -125,16 +151,133 @@
         });
     });
 
+    const bulkIsolationButton = document.querySelector('[data-customer-bulk-isolation]');
+    if (bulkIsolationButton) {
+        bulkIsolationButton.addEventListener('click', function () {
+            const confirmationMessage = 'Isolir seluruh pelanggan yang sudah melewati jatuh tempo dan belum membayar? Profile PPP Secret pelanggan yang memenuhi syarat akan diubah ke ISOLIR dan sesi aktifnya diputus.';
+            let confirmationCountdown = null;
+            const confirmation = typeof Swal === 'undefined'
+                ? Promise.resolve({ isConfirmed: window.confirm(confirmationMessage) })
+                : AppAlert.confirm(confirmationMessage, {
+                title: 'Konfirmasi Isolir Massal',
+                icon: 'warning',
+                confirmButtonText: 'Tunggu 3 detik...',
+                cancelButtonText: 'Batal',
+                didOpen: function () {
+                    const confirmButton = Swal.getConfirmButton();
+                    let seconds = 3;
+                    confirmButton.disabled = true;
+                    confirmationCountdown = window.setInterval(function () {
+                        seconds -= 1;
+                        if (seconds > 0) {
+                            confirmButton.textContent = 'Tunggu ' + seconds + ' detik...';
+                            return;
+                        }
+                        window.clearInterval(confirmationCountdown);
+                        confirmationCountdown = null;
+                        confirmButton.disabled = false;
+                        confirmButton.textContent = 'Ya, proses isolir';
+                    }, 1000);
+                },
+                willClose: function () {
+                    if (confirmationCountdown) window.clearInterval(confirmationCountdown);
+                }
+            });
+            confirmation.then(function (result) {
+                if (!result.isConfirmed) return;
+                bulkIsolationButton.disabled = true;
+                if (window.AppLoader) window.AppLoader.show();
+                fetch(bulkIsolationButton.dataset.url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' }
+                })
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        const details = Array.isArray(data.messages) && data.messages.length
+                            ? '<br><small>' + data.messages.map(function (message) { return String(message).replace(/[&<>"']/g, function (character) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' })[character]; }); }).join('<br>') + '</small>'
+                            : '';
+                        return AppAlert.notify((data.message || 'Proses isolir selesai.') + details, data.success ? 'success' : 'error').then(function () {
+                            window.location.reload();
+                        });
+                    })
+                    .catch(function () { AppAlert.notify('Tidak dapat memproses isolir pelanggan jatuh tempo.', 'error'); })
+                    .finally(function () {
+                        bulkIsolationButton.disabled = false;
+                        if (window.AppLoader) window.AppLoader.hide(0);
+                    });
+            });
+        });
+    }
+
+    const bulkRestoreButton = document.querySelector('[data-customer-bulk-restore]');
+    if (bulkRestoreButton) {
+        bulkRestoreButton.addEventListener('click', function () {
+            const confirmationMessage = 'Pulihkan seluruh pelanggan yang sedang diisolir? PPP Secret akan dikembalikan ke profile paket masing-masing dan sesi isolir akan diputus.';
+            let confirmationCountdown = null;
+            const confirmation = typeof Swal === 'undefined'
+                ? Promise.resolve({ isConfirmed: window.confirm(confirmationMessage) })
+                : AppAlert.confirm(confirmationMessage, {
+                title: 'Konfirmasi Pemulihan Massal',
+                icon: 'warning',
+                confirmButtonText: 'Tunggu 3 detik...',
+                cancelButtonText: 'Batal',
+                didOpen: function () {
+                    const confirmButton = Swal.getConfirmButton();
+                    let seconds = 3;
+                    confirmButton.disabled = true;
+                    confirmationCountdown = window.setInterval(function () {
+                        seconds -= 1;
+                        if (seconds > 0) {
+                            confirmButton.textContent = 'Tunggu ' + seconds + ' detik...';
+                            return;
+                        }
+                        window.clearInterval(confirmationCountdown);
+                        confirmationCountdown = null;
+                        confirmButton.disabled = false;
+                        confirmButton.textContent = 'Ya, pulihkan semua';
+                    }, 1000);
+                },
+                willClose: function () {
+                    if (confirmationCountdown) window.clearInterval(confirmationCountdown);
+                }
+            });
+
+            confirmation.then(function (result) {
+                if (!result.isConfirmed) return;
+                bulkRestoreButton.disabled = true;
+                if (window.AppLoader) window.AppLoader.show();
+                fetch(bulkRestoreButton.dataset.url, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { Accept: 'application/json' }
+                })
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        return AppAlert.notify(data.message || 'Pemulihan isolir selesai.', data.success ? 'success' : 'error').then(function () {
+                            window.location.reload();
+                        });
+                    })
+                    .catch(function () { AppAlert.notify('Tidak dapat memulihkan pelanggan yang diisolir.', 'error'); })
+                    .finally(function () {
+                        bulkRestoreButton.disabled = false;
+                        if (window.AppLoader) window.AppLoader.hide(0);
+                    });
+            });
+        });
+    }
+
     document.querySelectorAll('.customer-isolation-action').forEach(function (button) {
         button.addEventListener('click', function () {
             const restoring = button.dataset.mode === 'restore';
             const customerName = button.dataset.customerName || 'pelanggan';
             const question = restoring
                 ? 'Pulihkan ' + customerName + ' ke profile paket dan putus sesi isolir?'
-                : 'Uji isolir ' + customerName + '? Profile akan diubah ke ISOLIR dan sesi aktif diputus.';
+                : 'Isolir pelanggan ' + customerName + ' sekarang? PPP Secret akan dipindahkan ke profile ISOLIR dan sesi aktif akan diputus.';
             AppAlert.confirm(question, {
                 icon: restoring ? 'question' : 'warning',
-                confirmButtonText: restoring ? 'Ya, pulihkan' : 'Ya, isolir'
+                confirmButtonText: restoring ? 'Ya, pulihkan' : 'Ya, isolir sekarang',
+                cancelButtonText: 'Batal'
             }).then(function (result) {
                 if (!result.isConfirmed) return;
                 const formData = new FormData(); formData.append('customer_id', button.dataset.customerId);

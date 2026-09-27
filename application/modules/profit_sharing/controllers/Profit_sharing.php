@@ -16,6 +16,45 @@ class Profit_sharing extends MY_Controller
     {
         $year = (int) $this->input->get('year') ?: (int) date('Y');
         $years = $this->financial_report_model->available_years(); if (!in_array($year, $years, true)) $years[] = $year; rsort($years);
+        $report = $this->annualReport($year);
+        $printPeriods = [];
+        foreach ($years as $availableYear) {
+            foreach ($this->financial_report_model->monthly_summary($availableYear) as $summary) {
+                if ((int) $summary['transaction_count'] > 0) $printPeriods[(int) $availableYear][] = (int) $summary['bill_month'];
+            }
+        }
+        $this->render('index', ['title' => 'Bagi Hasil - ' . app_setting('isp_name', 'ISP BATARA NET'), 'year' => $year,
+            'years' => $years, 'rows' => $report['rows'], 'totals' => $report['totals'], 'print_periods' => $printPeriods]);
+    }
+
+    public function print_report()
+    {
+        $year = (int) $this->input->get('year') ?: (int) date('Y');
+        $month = max(1, min(12, (int) $this->input->get('month') ?: (int) date('n')));
+        if (!$this->financial_report_model->month_detail($year, $month)) {
+            show_error(app_language() === 'en' ? 'No payment data is available for the selected period.' : 'Tidak ada data pembayaran pada periode yang dipilih.', 404, app_language() === 'en' ? 'Report Not Available' : 'Laporan Tidak Tersedia');
+            return;
+        }
+        $report = $this->annualReport($year);
+        $selected = null;
+        foreach ($report['rows'] as $row) {
+            if ((int) $row['month'] === $month) { $selected = $row; break; }
+        }
+        if (!$selected) show_404();
+        $this->load->view('print', [
+            'year' => $year,
+            'month' => $month,
+            'rows' => [$selected],
+            'totals' => ['net' => $selected['net'], 'party_1' => $selected['party_1'],
+                'party_2' => $selected['party_2'], 'reserve' => $selected['reserve']],
+            'report_number' => sprintf('PS/%04d/%02d/%s', $year, $month, date('YmdHis')),
+            'prepared_by' => isset($this->currentUser['name']) ? $this->currentUser['name'] : 'Administrator',
+            'auto_print' => $this->input->get('autoprint') === '1',
+        ]);
+    }
+
+    private function annualReport($year)
+    {
         $periodSettings = $this->profit_sharing_model->settings_for_year($year);
         $source = array_fill(1, 12, 0.0);
         foreach ($this->financial_report_model->monthly_summary($year) as $row) $source[(int) $row['bill_month']] = (float) $row['net_income'];
@@ -27,8 +66,7 @@ class Profit_sharing extends MY_Controller
                 'party_2' => round($net * $p2 / 100, 2), 'reserve' => round($net * $reserve / 100, 2), 'setting' => $setting, 'reserve_percent' => $reserve];
             foreach ($totals as $key => $value) $totals[$key] += $row[$key]; $rows[] = $row;
         }
-        $this->render('index', ['title' => 'Bagi Hasil - ' . app_setting('isp_name', 'ISP BATARA NET'), 'year' => $year,
-            'years' => $years, 'rows' => $rows, 'totals' => $totals]);
+        return ['rows' => $rows, 'totals' => $totals];
     }
 
     public function settings()

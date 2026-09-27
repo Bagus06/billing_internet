@@ -1,2 +1,2 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<?php // Tambahkan <script> asset JavaScript khusus modul profit_sharing di file ini. ?>
+<script src="<?= base_url('application/modules/profit_sharing/assets/js/profit-sharing.js') ?>?v=<?= filemtime(APPPATH . 'modules/profit_sharing/assets/js/profit-sharing.js') ?>"></script>

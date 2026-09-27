@@ -9,11 +9,10 @@ class Customer_model extends MY_Model
         'customer_code',
         'name',
         'phone',
-        'package_name',
-        'group_name',
-        'customer_status',
         'promoter',
     ];
+
+    private $selectFilters = ['package_name', 'group_name', 'customer_status'];
 
     public function get_all()
     {
@@ -44,6 +43,22 @@ class Customer_model extends MY_Model
     public function count_all()
     {
         return (int) $this->db->count_all($this->table);
+    }
+
+    public function filter_options()
+    {
+        $options = [];
+        foreach (['package_name', 'group_name', 'customer_status'] as $field) {
+            $rows = $this->db->select($field)->distinct()->where($field . ' IS NOT NULL', null, false)
+                ->where($field . ' !=', '')->order_by($field, 'ASC')->get($this->table)->result_array();
+            $options[$field] = array_values(array_filter(array_map(function ($row) use ($field) {
+                return trim((string) $row[$field]);
+            }, $rows)));
+        }
+        $options['payment_status'] = ['SUDAH BAYAR', 'BELUM BAYAR'];
+        $options['isolation_status'] = ['ISOLIR', 'NORMAL'];
+        $options['arrears_status'] = ['MENUNGGAK', 'TIDAK MENUNGGAK'];
+        return $options;
     }
 
     public function find($id)
@@ -111,6 +126,16 @@ class Customer_model extends MY_Model
             ->where('customers.is_isolated', 0)
             ->where("NOT EXISTS (SELECT 1 FROM customer_payments p WHERE (p.customer_id = customers.id OR p.customer_code = customers.customer_code) AND p.bill_month = {$month} AND p.bill_year = {$year})", null, false)
             ->order_by('customers.id', 'ASC')->get()->result_array();
+    }
+
+    public function isolation_restore_candidates()
+    {
+        return $this->db->select('customers.*')
+            ->from($this->table)
+            ->where('customers.customer_status', 'ACTIVE')
+            ->where('customers.is_isolated', 1)
+            ->order_by('customers.id', 'ASC')
+            ->get()->result_array();
     }
 
     public function update_isolation($id, $isolated, $isolatedAt = null, $originalProfile = null, $error = null)
@@ -223,6 +248,10 @@ class Customer_model extends MY_Model
             $this->db->like($field, trim($filters[$field]));
         }
 
+        foreach ($this->selectFilters as $field) {
+            if (!empty($filters[$field])) $this->db->where($field, trim($filters[$field]));
+        }
+
         if (!empty($filters['payment_status']) && $paymentExists) {
             $status = strtoupper(trim($filters['payment_status']));
 
@@ -232,5 +261,39 @@ class Customer_model extends MY_Model
                 $this->db->where("NOT {$paymentExists}", null, false);
             }
         }
+
+        if (!empty($filters['isolation_status'])) {
+            $this->db->where('customers.is_isolated', strtoupper(trim($filters['isolation_status'])) === 'ISOLIR' ? 1 : 0);
+        }
+
+        if (!empty($filters['arrears_status'])) {
+            $arrearsExists = $this->arrearsExistsExpression();
+            if (strtoupper(trim($filters['arrears_status'])) === 'MENUNGGAK') {
+                $this->db->where($arrearsExists, null, false);
+            } else {
+                $this->db->where("NOT ({$arrearsExists})", null, false);
+            }
+        }
+    }
+
+    private function arrearsExistsExpression()
+    {
+        $today = new DateTimeImmutable('today');
+        $groupOneLastDue = $this->lastDuePeriod($today, (int) app_setting('isolation_group_1_due_day', 10));
+        $groupTwoLastDue = $this->lastDuePeriod($today, (int) app_setting('isolation_group_2_due_day', 25));
+        $lastDue = "CASE WHEN LOWER(COALESCE(customers.group_name, '')) REGEXP '(^|[^0-9])2([^0-9]|$)' THEN '{$groupTwoLastDue}' ELSE '{$groupOneLastDue}' END";
+        $startPeriod = "COALESCE(DATE_FORMAT(customers.psb_date, '%Y-%m-01'), DATE_FORMAT(customers.created_at, '%Y-%m-01'))";
+        $paymentPeriod = "STR_TO_DATE(CONCAT(p.bill_year, '-', LPAD(p.bill_month, 2, '0'), '-01'), '%Y-%m-%d')";
+        $paidPeriods = "(SELECT COUNT(DISTINCT CONCAT(p.bill_year, '-', LPAD(p.bill_month, 2, '0'))) FROM customer_payments p WHERE (p.customer_id = customers.id OR p.customer_code = customers.customer_code) AND {$paymentPeriod} BETWEEN {$startPeriod} AND {$lastDue})";
+        $expectedPeriods = "GREATEST(0, TIMESTAMPDIFF(MONTH, {$startPeriod}, {$lastDue}) + 1)";
+        return "COALESCE((UPPER(COALESCE(customers.customer_status, '')) <> 'LEAD' AND {$startPeriod} IS NOT NULL AND {$expectedPeriods} > {$paidPeriods}), 0) = 1";
+    }
+
+    private function lastDuePeriod(DateTimeImmutable $today, $dueDay)
+    {
+        $grace = max(0, (int) app_setting('isolation_grace_days', 5));
+        $dueDay = max(1, min((int) $today->format('t'), (int) $dueDay));
+        $deadline = $today->setDate((int) $today->format('Y'), (int) $today->format('n'), $dueDay)->modify('+' . $grace . ' days');
+        return ($today >= $deadline ? $today->modify('first day of this month') : $today->modify('first day of previous month'))->format('Y-m-d');
     }
 }

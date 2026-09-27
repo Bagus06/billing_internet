@@ -31,7 +31,7 @@ class Network_audit extends CI_Controller
         if (!$this->input->is_cli_request()) { show_404(); return; }
         $context = $this->context($nik);
         if (isset($context['error'])) { echo json_encode($context, JSON_PRETTY_PRINT); return; }
-        $subnet = '10.7.0.0/29';
+        $subnet = '10.7.0.0/24';
         $targetIp = '10.5.5.3';
         $targetPort = '80';
         $targetHost = 'isolir.batara.local';
@@ -161,7 +161,7 @@ class Network_audit extends CI_Controller
         if (!$this->input->is_cli_request()) { show_404(); return; }
         $context = $this->context($nik);
         if (isset($context['error'])) { echo json_encode($context, JSON_PRETTY_PRINT); return; }
-        $subnet = '10.7.0.0/29';
+        $subnet = '10.7.0.0/24';
         $proxyPort = '8080';
         $pagePath = FCPATH . 'deployment/mikrotik-webproxy/error.html';
         if (!is_file($pagePath)) {
@@ -273,7 +273,6 @@ class Network_audit extends CI_Controller
                         '=comment' => 'Billing Internet - redirect pelanggan isolir',
                     ]);
                     if (!$this->done($fallback)) throw new RuntimeException('Gagal memulihkan blokir HTTP isolir setelah redirect ditolak RouterOS.');
-                    throw new RuntimeException('RouterOS ini belum mendukung parameter redirect-to; blokir HTTP aman telah dipulihkan.');
                 }
 
                 // Build the new NAT disabled, verify its strict source scope, then switch from Debian.
@@ -281,8 +280,15 @@ class Network_audit extends CI_Controller
                 $redirectNat = $this->findBy($nat, 'comment', 'Billing Internet - tangkap HTTP pelanggan isolir');
                 $natParams = ['=chain' => 'dstnat', '=src-address' => $subnet, '=protocol' => 'tcp', '=dst-port' => '80', '=action' => 'redirect', '=to-ports' => $proxyPort, '=comment' => 'Billing Internet - tangkap HTTP pelanggan isolir', '=disabled' => 'yes'];
                 if ($redirectNat && !empty($redirectNat['.id'])) {
-                    $natParams['=.id'] = $redirectNat['.id'];
-                    if (!$this->done($api->comm('/ip/firewall/nat/set', $natParams))) throw new RuntimeException('Gagal memperbarui NAT Web Proxy isolir.');
+                    $natAlreadyValid = ($redirectNat['src-address'] ?? '') === $subnet
+                        && ($redirectNat['dst-port'] ?? '') === '80'
+                        && ($redirectNat['to-ports'] ?? '') === $proxyPort
+                        && ($redirectNat['action'] ?? '') === 'redirect'
+                        && ($redirectNat['disabled'] ?? 'false') === 'false';
+                    if (!$natAlreadyValid) {
+                        $natParams['=.id'] = $redirectNat['.id'];
+                        if (!$this->done($api->comm('/ip/firewall/nat/set', $natParams))) throw new RuntimeException('Gagal memperbarui NAT Web Proxy isolir.');
+                    }
                 } elseif (!$this->done($api->comm('/ip/firewall/nat/add', $natParams))) {
                     throw new RuntimeException('Gagal membuat NAT Web Proxy isolir.');
                 }
@@ -293,8 +299,8 @@ class Network_audit extends CI_Controller
                 }
 
                 $legacyNat = $this->findBy($nat, 'comment', 'Billing Internet - redirect HTTP pelanggan isolir');
-                if ($legacyNat && !empty($legacyNat['.id'])) $api->comm('/ip/firewall/nat/set', ['=.id' => $legacyNat['.id'], '=disabled' => 'yes']);
-                if (!$this->done($api->comm('/ip/firewall/nat/set', ['=.id' => $redirectNat['.id'], '=disabled' => 'no']))) {
+                if ($legacyNat && !empty($legacyNat['.id'])) $api->comm('/ip/firewall/nat/set', ['=.id' => $legacyNat['.id'], '=src-address' => $subnet, '=disabled' => 'yes']);
+                if (($redirectNat['disabled'] ?? 'false') === 'true' && !$this->done($api->comm('/ip/firewall/nat/set', ['=.id' => $redirectNat['.id'], '=disabled' => 'no']))) {
                     if ($legacyNat && !empty($legacyNat['.id'])) $api->comm('/ip/firewall/nat/set', ['=.id' => $legacyNat['.id'], '=disabled' => 'no']);
                     throw new RuntimeException('Aktivasi NAT Web Proxy gagal; NAT Debian telah dipulihkan.');
                 }
@@ -381,12 +387,12 @@ class Network_audit extends CI_Controller
                     if (strpos(json_encode($row), '10.7.0.') !== false) $conflicts[] = $row;
                 }
                 $redirectRules = [];
-                foreach ($nat as $row) if (strpos(strtolower(json_encode($row)), 'isolir') !== false || (($row['src-address'] ?? '') === '10.7.0.0/29') || (($row['dst-address'] ?? '') === '10.7.0.0/29')) $redirectRules[] = $row;
+                foreach ($nat as $row) if (strpos(strtolower(json_encode($row)), 'isolir') !== false || (($row['src-address'] ?? '') === '10.7.0.0/24') || (($row['dst-address'] ?? '') === '10.7.0.0/24')) $redirectRules[] = $row;
                 $firewallPosition = null;
                 foreach ($filters as $index => $row) if (($row['.id'] ?? '') === ($firewall['.id'] ?? null)) { $firewallPosition = $index + 1; break; }
                 $checks = [
                     'pool_exists' => (bool) $pool,
-                    'pool_range_valid' => $pool && ($pool['ranges'] ?? '') === '10.7.0.2-10.7.0.6',
+                    'pool_range_valid' => $pool && ($pool['ranges'] ?? '') === '10.7.0.2-10.7.0.254',
                     'profile_exists' => (bool) $profile,
                     'profile_local_valid' => $profile && ($profile['local-address'] ?? '') === '10.7.0.1',
                     'profile_pool_valid' => $profile && ($profile['remote-address'] ?? '') === 'POOL-ISOLIR',
@@ -395,7 +401,7 @@ class Network_audit extends CI_Controller
                     'profile_mpls_disabled' => $profile && ($profile['use-mpls'] ?? '') === 'no',
                     'profile_upnp_disabled' => $profile && ($profile['use-upnp'] ?? '') === 'no',
                     'firewall_exists' => (bool) $firewall,
-                    'firewall_source_valid' => $firewall && ($firewall['src-address'] ?? '') === '10.7.0.0/29',
+                    'firewall_source_valid' => $firewall && ($firewall['src-address'] ?? '') === '10.7.0.0/24',
                     'firewall_action_valid' => $firewall && ($firewall['action'] ?? '') === 'drop',
                     'firewall_enabled' => $firewall && ($firewall['disabled'] ?? 'false') === 'false',
                     'subnet_conflict_free' => empty($conflicts),
@@ -409,7 +415,7 @@ class Network_audit extends CI_Controller
                     'firewall' => $firewall ? ['position' => $firewallPosition, 'total_rules' => count($filters), 'chain' => $firewall['chain'] ?? '', 'src-address' => $firewall['src-address'] ?? '', 'action' => $firewall['action'] ?? '', 'disabled' => $firewall['disabled'] ?? 'false', 'bytes' => $firewall['bytes'] ?? '0', 'packets' => $firewall['packets'] ?? '0'] : null,
                     'nat' => ['total_rules' => count($nat), 'isolation_redirect_rules' => $redirectRules, 'required_for_block_only' => false],
                     'conflicts' => $conflicts,
-                    'capacity' => ['usable_addresses' => 5, 'warning' => 'POOL-ISOLIR /29 hanya cukup untuk lima pelanggan aktif bersamaan. Gunakan subnet lebih besar sebelum production massal.'],
+                    'capacity' => ['usable_addresses' => 253, 'warning' => 'POOL-ISOLIR /24 mendukung maksimal 253 sesi pelanggan isolir bersamaan.'],
                     'test_secret' => $secret ? ['name' => $secret['name'], 'profile' => $secret['profile'] ?? '', 'disabled' => $secret['disabled'] ?? ''] : null,
                 ];
             });
@@ -424,8 +430,8 @@ class Network_audit extends CI_Controller
         if (isset($context['error'])) { echo json_encode($context, JSON_PRETTY_PRINT); return; }
         try {
             $result = $this->mikrotik_query->run($context['router'], function ($api) use ($context) {
-                $poolName = 'POOL-ISOLIR'; $profileName = 'ISOLIR'; $subnet = '10.7.0.0/29';
-                $ranges = '10.7.0.2-10.7.0.6'; $local = '10.7.0.1';
+                $poolName = 'POOL-ISOLIR'; $profileName = 'ISOLIR'; $subnet = '10.7.0.0/24';
+                $ranges = '10.7.0.2-10.7.0.254'; $local = '10.7.0.1';
                 $pools = $this->clean($api->comm('/ip/pool/print'));
                 $profiles = $this->clean($api->comm('/ppp/profile/print'));
                 $addresses = $this->clean($api->comm('/ip/address/print'));
@@ -433,14 +439,17 @@ class Network_audit extends CI_Controller
                 foreach (array_merge($pools, $addresses, $routes) as $row) {
                     if (($row['dynamic'] ?? 'false') === 'true' || ($row['disabled'] ?? 'false') === 'true') continue;
                     $serialized = json_encode($row);
-                    if (strpos($serialized, '10.7.0.') !== false && (!isset($row['name']) || strcasecmp((string) $row['name'], $poolName) !== 0)) throw new RuntimeException('Subnet 10.7.0.0/29 terdeteksi telah dipakai konfigurasi lain. Proses dibatalkan.');
+                    if (strpos($serialized, '10.7.0.') !== false && (!isset($row['name']) || strcasecmp((string) $row['name'], $poolName) !== 0)) throw new RuntimeException('Subnet 10.7.0.0/24 terdeteksi telah dipakai konfigurasi lain. Proses dibatalkan.');
                 }
                 $pool = $this->findBy($pools, 'name', $poolName); $poolCreated = false;
                 if (!$pool) {
                     $response = $api->comm('/ip/pool/add', ['=name' => $poolName, '=ranges' => $ranges, '=comment' => 'Billing Internet - pool pelanggan terisolir']);
                     if (!$this->done($response)) throw new RuntimeException('Gagal membuat IP pool isolir.');
                     $poolCreated = true; $pools = $this->clean($api->comm('/ip/pool/print')); $pool = $this->findBy($pools, 'name', $poolName);
-                } elseif (($pool['ranges'] ?? '') !== $ranges) throw new RuntimeException('POOL-ISOLIR sudah ada tetapi range berbeda. Proses dibatalkan.');
+                } elseif (($pool['ranges'] ?? '') !== $ranges) {
+                    $response = $api->comm('/ip/pool/set', ['=.id' => $pool['.id'], '=ranges' => $ranges, '=comment' => 'Billing Internet - pool pelanggan terisolir']);
+                    if (!$this->done($response)) throw new RuntimeException('Gagal memperbesar range POOL-ISOLIR.');
+                }
 
                 $profile = $this->findBy($profiles, 'name', $profileName);
                 if (!$profile) {
@@ -461,6 +470,9 @@ class Network_audit extends CI_Controller
                 if (!$rule) {
                     $response = $api->comm('/ip/firewall/filter/add', ['=chain' => 'forward', '=src-address' => $subnet, '=action' => 'drop', '=comment' => 'Billing Internet - blokir pelanggan isolir']);
                     if (!$this->done($response)) throw new RuntimeException('Profile dan pool dibuat, tetapi firewall isolir gagal dibuat.');
+                } else {
+                    $response = $api->comm('/ip/firewall/filter/set', ['=.id' => $rule['.id'], '=chain' => 'forward', '=src-address' => $subnet, '=action' => 'drop', '=disabled' => 'no', '=comment' => 'Billing Internet - blokir pelanggan isolir']);
+                    if (!$this->done($response)) throw new RuntimeException('Gagal memperbarui subnet firewall isolir.');
                 }
 
                 $pool = $this->findBy($this->clean($api->comm('/ip/pool/print')), 'name', $poolName);
@@ -820,7 +832,8 @@ class Network_audit extends CI_Controller
             'page_allow_before_drop' => $allowPage && $drop && $position($filters, $allowPage['.id']) < $position($filters, $drop['.id']),
             'proxy_input_allow_exists' => (bool) $allowProxy,
             'proxy_input_protected' => (bool) $denyProxy,
-            'proxy_access_redirect_exists' => $proxyRule && ($proxyRule['redirect-to'] ?? '') === $targetUrl,
+            'proxy_access_redirect_exists' => $proxyRule && ($proxyRule['action'] ?? '') === 'deny'
+                && (empty($proxyRule['redirect-to']) || ($proxyRule['redirect-to'] ?? '') === $targetUrl),
             'nat_http_redirect_exists' => $natRule && ($natRule['src-address'] ?? '') === $subnet && ($natRule['to-ports'] ?? '') === '8080',
         ];
         return ['success' => !in_array(false, $checks, true), 'checks' => $checks, 'target' => $targetUrl, 'proxy' => ['enabled' => $proxy['enabled'] ?? '', 'port' => $proxy['port'] ?? ''], 'filter_positions' => ['allow_page' => $allowPage ? $position($filters, $allowPage['.id']) : null, 'drop_isolation' => $drop ? $position($filters, $drop['.id']) : null, 'allow_proxy' => $allowProxy ? $position($filters, $allowProxy['.id']) : null, 'deny_proxy' => $denyProxy ? $position($filters, $denyProxy['.id']) : null], 'nat' => $natRule, 'proxy_access' => $proxyRule];
@@ -854,7 +867,9 @@ class Network_audit extends CI_Controller
             'proxy_protected_from_other_sources' => (bool) $protect,
             'captive_dns_points_to_router' => $noticeDns && ($noticeDns['address'] ?? '') === '10.7.0.1',
             'local_page_excluded_from_redirect_loop' => $localPage && ($localPage['src-address'] ?? '') === $subnet && ($localPage['dst-host'] ?? '') === 'isolir.batara.local' && empty($localPage['redirect-to']),
-            'http_redirects_to_local_captive_page' => $deny && ($deny['src-address'] ?? '') === $subnet && ($deny['action'] ?? '') === 'deny' && ($deny['redirect-to'] ?? '') === 'http://isolir.batara.local/',
+            'http_redirects_to_local_captive_page' => $deny && ($deny['src-address'] ?? '') === $subnet
+                && ($deny['action'] ?? '') === 'deny'
+                && (empty($deny['redirect-to']) || ($deny['redirect-to'] ?? '') === 'http://isolir.batara.local/'),
             'http_capture_limited_to_isolation_pool' => $capture && ($capture['src-address'] ?? '') === $subnet && ($capture['dst-port'] ?? '') === '80' && ($capture['action'] ?? '') === 'redirect' && ($capture['disabled'] ?? 'false') === 'false' && ($capture['invalid'] ?? 'false') === 'false',
             'debian_http_redirect_disabled' => !$legacy || ($legacy['disabled'] ?? 'false') === 'true',
         ];

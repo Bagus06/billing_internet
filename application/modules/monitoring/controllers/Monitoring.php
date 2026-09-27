@@ -191,8 +191,18 @@ class Monitoring extends MY_Controller
 
                 $sessionRows = $this->filterRows($sessions);
                 $suffix = app_setting('pppoe_username_suffix', '@BATARA.net');
-                $secretRows = array_values(array_filter($this->filterRows($secrets), function ($secret) use ($suffix) {
-                    return isset($secret['name']) && preg_match('/' . preg_quote($suffix, '/') . '$/i', trim($secret['name']));
+                $secretRows = array_values(array_filter($this->filterRows($secrets), function ($secret) use ($suffix, $customersByNik) {
+                    if (!isset($secret['name']) || !preg_match('/' . preg_quote($suffix, '/') . '$/i', trim($secret['name']))) {
+                        return false;
+                    }
+
+                    $nik = $this->usernamePrefix($secret['name']);
+                    if ($nik === '' || !isset($customersByNik[$nik])) {
+                        return true;
+                    }
+
+                    $status = strtoupper(trim((string) $customersByNik[$nik]['customer_status']));
+                    return !in_array($status, ['NONACTIVE', 'NONAKTIF'], true);
                 }));
                 $activeByName = [];
                 $trafficByName = $this->trafficByUsername($this->filterRows($interfaces));
