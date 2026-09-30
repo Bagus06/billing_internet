@@ -28,10 +28,9 @@ class Customer_isolation
     private function runDueCustomers($source, $date = null)
     {
         $today = $date ? new DateTimeImmutable($date) : new DateTimeImmutable('today');
-        $customers = $this->CI->customer_model->isolation_candidates((int) $today->format('n'), (int) $today->format('Y'));
+        $customers = $this->CI->customer_model->isolation_due_candidates($today);
         $isolated = 0; $skipped = 0; $failed = 0; $messages = [];
         foreach ($customers as $customer) {
-            if (!$this->isIsolationDue($customer, $today)) { $skipped++; continue; }
             if (!empty($customer['is_isolated'])) { $skipped++; continue; }
             $outcome = $this->isolate($customer, $source);
             if ($outcome['success']) $isolated++; else $failed++;
@@ -76,11 +75,10 @@ class Customer_isolation
     public function preview($date = null)
     {
         $today = $date ? new DateTimeImmutable($date) : new DateTimeImmutable('today');
-        $customers = $this->CI->customer_model->isolation_candidates((int) $today->format('n'), (int) $today->format('Y'));
+        $customers = $this->CI->customer_model->isolation_due_candidates($today);
         $eligible = [];
         foreach ($customers as $customer) {
-            $isolationDate = $this->isolationDate($customer, $today);
-            if ($today < $isolationDate) continue;
+            $isolationDate = $this->lastIsolationDate($customer, $today);
             $eligible[] = [
                 'id' => (int) $customer['id'],
                 'customer_code' => (string) $customer['customer_code'],
@@ -213,9 +211,10 @@ class Customer_isolation
         return $disconnected;
     }
 
-    private function isIsolationDue(array $customer, DateTimeImmutable $today)
+    private function lastIsolationDate(array $customer, DateTimeImmutable $today)
     {
-        return $today >= $this->isolationDate($customer, $today);
+        $current = $this->isolationDate($customer, $today);
+        return $today >= $current ? $current : $this->isolationDate($customer, $today->modify('first day of previous month'));
     }
 
     private function isolationDate(array $customer, DateTimeImmutable $today)

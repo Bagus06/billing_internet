@@ -128,6 +128,18 @@ class Customer_model extends MY_Model
             ->order_by('customers.id', 'ASC')->get()->result_array();
     }
 
+    public function isolation_due_candidates(DateTimeImmutable $today = null)
+    {
+        $today = $today ?: new DateTimeImmutable('today');
+        return $this->db->select('customers.*')
+            ->from($this->table)
+            ->where('customers.customer_status', 'ACTIVE')
+            ->where('customers.is_isolated', 0)
+            ->where($this->arrearsExistsExpression($today), null, false)
+            ->order_by('customers.id', 'ASC')
+            ->get()->result_array();
+    }
+
     public function isolation_restore_candidates()
     {
         return $this->db->select('customers.*')
@@ -276,9 +288,9 @@ class Customer_model extends MY_Model
         }
     }
 
-    private function arrearsExistsExpression()
+    private function arrearsExistsExpression(DateTimeImmutable $today = null)
     {
-        $today = new DateTimeImmutable('today');
+        $today = $today ?: new DateTimeImmutable('today');
         $groupOneLastDue = $this->lastDuePeriod($today, (int) app_setting('isolation_group_1_due_day', 10));
         $groupTwoLastDue = $this->lastDuePeriod($today, (int) app_setting('isolation_group_2_due_day', 25));
         $lastDue = "CASE WHEN LOWER(COALESCE(customers.group_name, '')) REGEXP '(^|[^0-9])2([^0-9]|$)' THEN '{$groupTwoLastDue}' ELSE '{$groupOneLastDue}' END";
