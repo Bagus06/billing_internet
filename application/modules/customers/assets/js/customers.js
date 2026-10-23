@@ -329,10 +329,13 @@
     const detailKtpButton = document.querySelector('[data-detail-ktp]');
     const detailWhatsapp = document.querySelector('[data-detail-whatsapp]');
     const detailMapButton = document.querySelector('[data-customer-map-popup]');
+    const detailNetworkToggle = document.querySelector('[data-detail-network-toggle]');
+    const detailNetworkRemote = document.querySelector('[data-detail-network-remote]');
     const customerAppShell = detailModal ? detailModal.closest('.app-shell') : null;
     let customerDetailBackdrop = null;
     let customerMapModal = null;
     let detailMapData = null;
+    let currentDetailCard = null;
 
     function whatsappNumber(value) {
         let number = String(value || '').replace(/\D/g, '');
@@ -361,6 +364,7 @@
     function openCustomerDetail(card) {
         if (!detailModal || !card) return;
         if (detailModal.classList.contains('is-open')) closeCustomerDetail();
+        currentDetailCard = card;
         detailModal.querySelectorAll('[data-detail]').forEach(function (field) {
             field.textContent = card.dataset[field.dataset.detail] || '-';
         });
@@ -388,6 +392,12 @@
             detailMapButton.disabled = !detailMapData;
             detailMapButton.classList.toggle('is-disabled', !detailMapData);
         }
+        if (detailNetworkToggle) {
+            const source = card.querySelector('[data-customer-network-toggle]');
+            detailNetworkToggle.hidden = !source || source.hidden;
+            if (source && !source.hidden) detailNetworkToggle.innerHTML = source.innerHTML;
+        }
+        if (detailNetworkRemote) detailNetworkRemote.disabled = !card.querySelector('.customer-remote-ont');
         customerDetailBackdrop = document.createElement('div');
         customerDetailBackdrop.className = 'pppoe-modal-backdrop';
         customerDetailBackdrop.addEventListener('click', closeCustomerDetail);
@@ -429,6 +439,180 @@
         document.body.appendChild(customerMapModal);
         requestAnimationFrame(function () { if (customerMapModal) customerMapModal.classList.add('is-open'); });
     });
+
+    const monitoringShell = document.querySelector('[data-customer-monitoring]');
+    const networkCards = Array.from(document.querySelectorAll('[data-customer-detail]'));
+    const trafficSamples = new Map();
+    let monitoringBusy = false;
+    let trafficBusy = false;
+
+    function formatNetworkRate(value) {
+        const bits = Math.max(0, Number(value) || 0) * 8;
+        if (bits >= 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
+        if (bits >= 1000) return (bits / 1000).toFixed(1) + ' Kbps';
+        return Math.round(bits) + ' bps';
+    }
+
+    function formatNetworkUptime(value) {
+        const uptime = String(value || '');
+        if (!uptime || uptime === '-') return '-';
+        const weeks = Number((uptime.match(/(\d+)w/) || [0, 0])[1]);
+        const days = Number((uptime.match(/(\d+)d/) || [0, 0])[1]);
+        let hours = Number((uptime.match(/(\d+)h/) || [0, 0])[1]);
+        let minutes = Number((uptime.match(/(\d+)m/) || [0, 0])[1]);
+        const clock = uptime.match(/(\d+):(\d+)(?::\d+)?/);
+        if (clock) { hours = Number(clock[1]); minutes = Number(clock[2]); }
+        return ((weeks * 7) + days) + 'D ' + hours + 'H ' + minutes + 'M';
+    }
+
+    function networkCardByCustomer(id) {
+        return networkCards.find(function (card) { return String(card.dataset.id) === String(id); }) || null;
+    }
+
+    function setNetworkField(card, key, value) {
+        const field = card.querySelector('[data-network-field="' + key + '"]');
+        if (field) field.textContent = value;
+    }
+
+    function updateNetworkCard(card, row) {
+        const strip = card.querySelector('[data-customer-network]');
+        if (!strip) return;
+        const online = row.status === 'ON';
+        const signal = row.optical_rx === null || row.optical_rx === undefined || row.optical_rx === '' ? 'N/A' : row.optical_rx + ' dBm';
+        strip.classList.remove('is-loading', 'is-online', 'is-offline', 'is-disabled', 'is-missing');
+        strip.classList.add(online ? 'is-online' : 'is-offline');
+        const badge = strip.querySelector('[data-network-field="badge"]');
+        if (badge) badge.innerHTML = '<i class="fa-solid ' + (online ? 'fa-circle-check' : 'fa-circle-xmark') + '"></i>' + (online ? 'ONLINE' : 'OFFLINE');
+        const uptime = formatNetworkUptime(row.uptime);
+        setNetworkField(card, 'uptime', uptime);
+        setNetworkField(card, 'rx', online ? '0 bps' : '-');
+        setNetworkField(card, 'tx', online ? '0 bps' : '-');
+        setNetworkField(card, 'signal', signal);
+        card.dataset.networkStatus = online ? 'ONLINE' : 'OFFLINE';
+        card.dataset.networkRouter = row.router || '-';
+        card.dataset.networkUsername = row.username || '-';
+        card.dataset.networkProfile = row.profile || '-';
+        card.dataset.networkAddress = row.address || '-';
+        card.dataset.networkCallerId = row.caller_id || '-';
+        card.dataset.networkUptime = uptime;
+        card.dataset.networkLastOff = row.last_off || '-';
+        card.dataset.networkRx = online ? '0 bps' : '-';
+        card.dataset.networkTx = online ? '0 bps' : '-';
+        card.dataset.networkSignal = signal;
+        card.dataset.networkOnt = [row.ont_name, row.ont_serial_number].filter(function (value) { return value && value !== '-'; }).join(' / ') || '-';
+        card.dataset.networkRouterId = row.router_id || '';
+        card.dataset.networkSecretId = row.secret_id || '';
+        card.dataset.networkActiveId = row.active_id || '';
+        card.dataset.networkDisabled = row.disabled ? '1' : '0';
+        card.dataset.networkTrafficKey = String(row.router_id || '') + '|' + String(row.username || '').toLowerCase();
+        const toggle = card.querySelector('[data-customer-network-toggle]');
+        if (toggle && row.secret_id) {
+            toggle.hidden = false;
+            toggle.innerHTML = row.disabled
+                ? '<i class="fa-solid fa-plug-circle-check"></i><span>Hubungkan PPPoE</span>'
+                : '<i class="fa-solid fa-plug-circle-xmark"></i><span>Putuskan PPPoE</span>';
+        }
+    }
+
+    function markMissingNetworkCards(found) {
+        networkCards.forEach(function (card) {
+            if (String(card.dataset.status || '').toUpperCase() !== 'ACTIVE' || found.has(String(card.dataset.id))) return;
+            const strip = card.querySelector('[data-customer-network]');
+            if (!strip) return;
+            strip.classList.remove('is-loading'); strip.classList.add('is-missing');
+            const badge = strip.querySelector('[data-network-field="badge"]');
+            if (badge) badge.innerHTML = '<i class="fa-solid fa-circle-question"></i>SECRET TIDAK ADA';
+            card.dataset.networkStatus = 'Secret tidak ditemukan';
+        });
+    }
+
+    function setMonitoringState(text, spinning) {
+        const label = document.querySelector('[data-network-sync-status]');
+        const icon = document.querySelector('[data-network-sync-icon]');
+        if (label) label.textContent = text;
+        if (icon) icon.classList.toggle('fa-spin', !!spinning);
+    }
+
+    function updateMonitoringSummary(data) {
+        const values = { online: data.active_sessions, offline: data.offline_sessions, total: data.total_secrets, routers: data.routers_online };
+        Object.keys(values).forEach(function (key) {
+            const field = document.querySelector('[data-network-summary="' + key + '"]');
+            if (field) field.textContent = Number(values[key] || 0);
+        });
+    }
+
+    function loadCustomerMonitoring(silent) {
+        if (!monitoringShell || monitoringBusy || !networkCards.length) return;
+        monitoringBusy = true;
+        if (!silent) setMonitoringState('Mengambil status jaringan...', true);
+        fetch(monitoringShell.dataset.sessionsUrl, { loader: false, cache: 'no-store', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (response) { if (!response.ok) throw new Error('HTTP ' + response.status); return response.json(); })
+            .then(function (data) {
+                const found = new Set();
+                (data.rows || []).forEach(function (row) {
+                    if (!row.customer_id) return;
+                    const card = networkCardByCustomer(row.customer_id);
+                    if (!card) return;
+                    found.add(String(row.customer_id)); updateNetworkCard(card, row);
+                    trafficSamples.set(card.dataset.networkTrafficKey, { rx: Number(row.bytes_in || 0), tx: Number(row.bytes_out || 0), at: Date.now() });
+                });
+                markMissingNetworkCards(found); updateMonitoringSummary(data);
+                const errors = (data.errors || []).length;
+                if (!silent || errors) setMonitoringState(errors ? errors + ' router gagal disinkronkan' : 'Sinkronisasi otomatis aktif', false);
+            })
+            .catch(function () { if (!silent) setMonitoringState('Status jaringan tidak dapat dimuat', false); })
+            .finally(function () { monitoringBusy = false; });
+    }
+
+    function loadCustomerTraffic() {
+        if (!monitoringShell || !networkCards.length || trafficBusy) return;
+        trafficBusy = true;
+        fetch(monitoringShell.dataset.trafficUrl, { loader: false, cache: 'no-store', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' }, credentials: 'same-origin' })
+            .then(function (response) { if (!response.ok) throw new Error('HTTP ' + response.status); return response.json(); })
+            .then(function (data) {
+                const now = Date.now();
+                (data.rows || []).forEach(function (row) {
+                    const key = String(row.router_id || '') + '|' + String(row.username || '').toLowerCase();
+                    const previous = trafficSamples.get(key);
+                    networkCards.forEach(function (card) {
+                        if (card.dataset.networkTrafficKey !== key || card.dataset.networkStatus !== 'ONLINE') return;
+                        const elapsed = previous ? Math.max(1, (now - previous.at) / 1000) : 0;
+                        const rx = elapsed ? Math.max(0, (Number(row.bytes_in || 0) - previous.rx) / elapsed) : 0;
+                        const tx = elapsed ? Math.max(0, (Number(row.bytes_out || 0) - previous.tx) / elapsed) : 0;
+                        setNetworkField(card, 'rx', formatNetworkRate(rx)); setNetworkField(card, 'tx', formatNetworkRate(tx));
+                        card.dataset.networkRx = formatNetworkRate(rx); card.dataset.networkTx = formatNetworkRate(tx);
+                    });
+                    trafficSamples.set(key, { rx: Number(row.bytes_in || 0), tx: Number(row.bytes_out || 0), at: now });
+                });
+            }).catch(function () {}).finally(function () { trafficBusy = false; });
+    }
+
+    function runNetworkToggle(card) {
+        if (!card || !monitoringShell || !card.dataset.networkSecretId) return;
+        const connecting = card.dataset.networkDisabled === '1';
+        AppAlert.confirm((connecting ? 'Hubungkan' : 'Putuskan') + ' PPPoE pelanggan ' + (card.dataset.name || '') + '?', {
+            icon: connecting ? 'question' : 'warning', confirmButtonText: connecting ? 'Ya, hubungkan' : 'Ya, putuskan'
+        }).then(function (result) {
+            if (!result.isConfirmed) return;
+            const body = new FormData(); body.append('router_id', card.dataset.networkRouterId); body.append('secret_id', card.dataset.networkSecretId);
+            if (card.dataset.networkActiveId) body.append('active_id', card.dataset.networkActiveId);
+            fetch(connecting ? monitoringShell.dataset.connectUrl : monitoringShell.dataset.disconnectUrl, { method: 'POST', body: body, headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+                .then(function (response) { return response.json(); })
+                .then(function (data) { return AppAlert.notify(data.message || 'Proses jaringan selesai.', data.success ? 'success' : 'error').then(function () { if (data.success) loadCustomerMonitoring(true); }); })
+                .catch(function () { AppAlert.notify('Aksi jaringan gagal dijalankan.', 'error'); });
+        });
+    }
+
+    document.querySelectorAll('[data-customer-network-toggle]').forEach(function (button) { button.addEventListener('click', function () { runNetworkToggle(button.closest('[data-customer-detail]')); }); });
+    if (detailNetworkToggle) detailNetworkToggle.addEventListener('click', function () { runNetworkToggle(currentDetailCard); });
+    if (detailNetworkRemote) detailNetworkRemote.addEventListener('click', function () { const remote = currentDetailCard && currentDetailCard.querySelector('.customer-remote-ont'); if (remote) remote.click(); });
+    if (monitoringShell && networkCards.length) {
+        loadCustomerMonitoring(false);
+        window.setInterval(function () { loadCustomerMonitoring(true); }, Math.max(10, Number(monitoringShell.dataset.refreshSeconds || 30)) * 1000);
+        const trafficInterval = Math.max(3, Number(monitoringShell.dataset.trafficSeconds || 5)) * 1000;
+        window.setTimeout(loadCustomerTraffic, trafficInterval);
+        window.setInterval(loadCustomerTraffic, trafficInterval);
+    }
     const customerActionMenus = Array.from(document.querySelectorAll('[data-customer-action-menu]'));
     function closeCustomerActionMenu(menu) {
         if (!menu) return;

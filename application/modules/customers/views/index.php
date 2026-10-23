@@ -9,8 +9,14 @@
         </div>
     </div>
 
-    <section class="menu-shell monitoring-shell">
-        <div class="menu-heading"><h1>Data Pelanggan</h1><p>Kelola pelanggan, paket layanan, status aktif, dan pembayaran.</p></div>
+    <section class="menu-shell monitoring-shell" data-customer-monitoring
+        data-sessions-url="<?= site_url('monitoring/sessions') ?>"
+        data-traffic-url="<?= site_url('monitoring/traffic') ?>"
+        data-connect-url="<?= site_url('monitoring/connect') ?>"
+        data-disconnect-url="<?= site_url('monitoring/disconnect') ?>"
+        data-refresh-seconds="<?= max(10, (int) app_setting('monitoring_refresh_seconds', 30)) ?>"
+        data-traffic-seconds="<?= max(3, (int) app_setting('traffic_refresh_seconds', 5)) ?>">
+        <div class="menu-heading"><h1>Pelanggan</h1><p>Kelola data, pembayaran, status PPPoE, trafik, dan perangkat pelanggan dalam satu halaman.</p></div>
         <?php $this->load->view('template/flash'); ?>
 
         <?php
@@ -27,6 +33,14 @@
                     <label for="customerPageSize">Per halaman</label><select id="customerPageSize" name="per_page" class="form-select customer-page-size" onchange="this.form.submit()"><?php foreach ([10, 25, 50, 100] as $size): ?><option value="<?= $size ?>" <?= (int) $per_page === $size ? 'selected' : '' ?>><?= $size ?></option><?php endforeach; ?></select>
                 </form>
             </div>
+        </div>
+
+        <div class="customer-network-summary" aria-live="polite">
+            <span class="is-sync"><i class="fa-solid fa-arrows-rotate" data-network-sync-icon></i><b data-network-sync-status>Mengambil status jaringan...</b></span>
+            <span><small>Online</small><strong data-network-summary="online">-</strong></span>
+            <span><small>Offline</small><strong data-network-summary="offline">-</strong></span>
+            <span><small>Total Secret</small><strong data-network-summary="total">-</strong></span>
+            <span><small>Router Aktif</small><strong data-network-summary="routers">-</strong></span>
         </div>
 
         <div class="customer-search-modal" data-customer-search-modal aria-hidden="true"><div class="customer-search-backdrop" data-customer-search-close></div><section class="customer-search-panel" role="dialog" aria-modal="true" aria-labelledby="customerSearchTitle"><header><div><small>Data Pelanggan</small><h2 id="customerSearchTitle"><i class="fa-solid fa-magnifying-glass"></i> Pencarian Lanjutan</h2></div><button type="button" data-customer-search-close aria-label="Tutup pencarian"><i class="fa-solid fa-xmark"></i></button></header><form method="get" action="<?= site_url('customers') ?>" class="customer-card-filter" data-customer-search-form><input type="hidden" name="per_page" value="<?= (int)$per_page ?>">
@@ -64,11 +78,19 @@
                             <div class="customer-card-status"><?php if (!empty($customer['is_isolated'])): ?><span class="monitoring-badge is-isolated">ISOLIR</span><?php endif; ?><span class="monitoring-badge <?= $isActive ? 'is-online' : 'is-offline' ?>"><?= html_escape($customer['customer_status']) ?></span><span class="monitoring-badge <?= $isPaid ? 'is-online' : 'is-offline' ?>"><?= html_escape($customer['payment_status']) ?></span></div>
                         </div>
                         <div class="customer-card-service"><div><span>Paket Internet</span><strong><?= html_escape($customer['package_name'] ?: '-') ?></strong></div><div><span>Biaya Bulanan</span><strong>Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?></strong></div><div><span>Kelompok</span><strong><?= html_escape($customer['group_name'] ?: '-') ?></strong><?php if ($hasArrears): ?><small class="customer-arrears-note" title="Periode: <?= html_escape($customer['arrears_periods']) ?>"><i class="fa-solid fa-circle-exclamation"></i><?= (int) $customer['arrears_count'] ?> bulan menunggak</small><?php endif; ?></div></div>
+                        <div class="customer-network-strip <?= $isActive ? 'is-loading' : 'is-disabled' ?>" data-customer-network>
+                            <span class="customer-network-state" data-network-field="badge"><i class="fa-solid <?= $isActive ? 'fa-circle-notch fa-spin' : 'fa-ban' ?>"></i><?= $isActive ? 'MEMUAT' : 'NONAKTIF' ?></span>
+                            <span title="Uptime"><i class="fa-regular fa-clock"></i><b data-network-field="uptime">-</b></span>
+                            <span title="Trafik download"><i class="fa-solid fa-arrow-down"></i><b data-network-field="rx">-</b></span>
+                            <span title="Trafik upload"><i class="fa-solid fa-arrow-up"></i><b data-network-field="tx">-</b></span>
+                            <span title="Redaman ONT"><i class="fa-solid fa-wave-square"></i><b data-network-field="signal">N/A</b></span>
+                        </div>
                         <div class="customer-card-footer"><span><i class="fa-regular fa-eye"></i> Klik card untuk melihat detail</span>
                             <details class="customer-action-menu" data-customer-action-menu><summary aria-label="Kelola pelanggan <?= html_escape($customer['name']) ?>" title="Kelola pelanggan"><i class="fa-solid fa-ellipsis-vertical"></i><span>Kelola</span></summary><div class="customer-action-dropdown">
                                 <button type="button" class="customer-action-item customer-pay-button" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-code="<?= html_escape($customer['customer_code']) ?>" data-customer-name="<?= html_escape($customer['name']) ?>" data-customer-price="Rp <?= number_format((float) $customer['price'], 0, ',', '.') ?>"><i class="fa-solid fa-wallet"></i> Bayar</button>
                                 <button type="button" class="customer-action-item customer-status-toggle" data-toggle-url="<?= site_url('customers/toggle-status') ?>" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-name="<?= html_escape($customer['name']) ?>" data-active="<?= $isActive ? '1' : '0' ?>"><i class="fa-solid <?= $isActive ? 'fa-user-slash' : 'fa-user-check' ?>"></i> <?= $isActive ? 'Nonaktifkan' : 'Aktifkan' ?></button>
                                 <button type="button" class="customer-action-item customer-remote-ont" data-url="<?= site_url('customers/remote-ont') ?>" data-customer-id="<?= (int) $customer['id'] ?>" data-customer-name="<?= html_escape($customer['name']) ?>"><i class="fa-solid fa-network-wired"></i> Remote ONT</button>
+                                <button type="button" class="customer-action-item customer-network-toggle" data-customer-network-toggle hidden><i class="fa-solid fa-plug-circle-xmark"></i><span>Putuskan PPPoE</span></button>
                                 <a class="customer-action-item" href="<?= site_url('customers/edit/' . $customer['id']) ?>"><i class="fa-solid fa-pen-to-square"></i> Edit</a>
                                 <a class="customer-action-item is-danger" href="<?= site_url('customers/delete/' . $customer['id']) ?>" data-confirm="Hapus pelanggan ini?"><i class="fa-solid fa-trash"></i> Hapus</a>
                             </div></details>
@@ -105,6 +127,14 @@
             <div class="pppoe-detail-item has-action"><span><i class="fa-solid fa-at"></i>Username</span><div class="pppoe-detail-value-action"><strong data-detail="secretName">-</strong><button type="button" class="pppoe-whatsapp-button customer-copy-secret" data-detail-copy="secretName" aria-label="Salin username"><i class="fa-regular fa-copy"></i></button></div></div>
             <div class="pppoe-detail-item has-action"><span><i class="fa-solid fa-lock"></i>Password</span><div class="pppoe-detail-value-action"><strong data-detail="secretPassword">-</strong><button type="button" class="pppoe-whatsapp-button customer-copy-secret" data-detail-copy="secretPassword" aria-label="Salin password"><i class="fa-regular fa-copy"></i></button></div></div>
         </div></section>
+        <section class="pppoe-detail-group"><div class="pppoe-detail-group-title"><i class="fa-solid fa-chart-line" aria-hidden="true"></i>Jaringan & ONT</div><div class="pppoe-detail-group-body">
+            <div class="pppoe-detail-item"><span><i class="fa-solid fa-signal"></i>Status PPPoE</span><strong data-detail="networkStatus">Belum dimuat</strong></div><div class="pppoe-detail-item"><span><i class="fa-solid fa-server"></i>Router</span><strong data-detail="networkRouter">-</strong></div>
+            <div class="pppoe-detail-item"><span><i class="fa-solid fa-at"></i>Username</span><strong data-detail="networkUsername">-</strong></div><div class="pppoe-detail-item"><span><i class="fa-solid fa-gauge-high"></i>Profile</span><strong data-detail="networkProfile">-</strong></div>
+            <div class="pppoe-detail-item"><span><i class="fa-solid fa-network-wired"></i>IP Remote</span><strong data-detail="networkAddress">-</strong></div><div class="pppoe-detail-item"><span><i class="fa-solid fa-fingerprint"></i>Caller ID</span><strong data-detail="networkCallerId">-</strong></div>
+            <div class="pppoe-detail-item"><span><i class="fa-regular fa-clock"></i>Uptime</span><strong data-detail="networkUptime">-</strong></div><div class="pppoe-detail-item"><span><i class="fa-solid fa-power-off"></i>Terakhir Offline</span><strong data-detail="networkLastOff">-</strong></div>
+            <div class="pppoe-detail-item"><span><i class="fa-solid fa-arrow-down"></i>Download</span><strong data-detail="networkRx">-</strong></div><div class="pppoe-detail-item"><span><i class="fa-solid fa-arrow-up"></i>Upload</span><strong data-detail="networkTx">-</strong></div>
+            <div class="pppoe-detail-item"><span><i class="fa-solid fa-wave-square"></i>Redaman</span><strong data-detail="networkSignal">N/A</strong></div><div class="pppoe-detail-item"><span><i class="fa-solid fa-microchip"></i>ONT</span><strong data-detail="networkOnt">-</strong></div>
+        </div><div class="customer-network-detail-actions"><button type="button" class="monitoring-action customer-detail-network-toggle" data-detail-network-toggle hidden><i class="fa-solid fa-plug-circle-xmark"></i><span>Putuskan PPPoE</span></button><button type="button" class="monitoring-action customer-detail-remote" data-detail-network-remote><i class="fa-solid fa-network-wired"></i><span>Remote ONT</span></button></div></section>
     </div>
 
     <div class="ktp-modal" id="ktpModal" aria-hidden="true"><div class="ktp-modal-backdrop" data-ktp-close></div><div class="ktp-modal-panel" role="dialog" aria-modal="true" aria-labelledby="ktpModalTitle"><div class="ktp-modal-header"><strong id="ktpModalTitle">Foto KTP</strong><button type="button" class="ktp-modal-close" data-ktp-close aria-label="Tutup preview KTP"><i class="fa-solid fa-xmark"></i></button></div><img src="" alt="Foto KTP" id="ktpModalImage"></div></div>

@@ -2,9 +2,8 @@
 $permissions=$this->session->userdata('auth_permissions')?:[];
 $can=function($key)use($permissions){return in_array($key,$permissions,true);};
 $groups=[
- ['id'=>'operations','title'=>'Operasional','subtitle'=>'Pelanggan dan monitoring','icon'=>'fa-chart-line','color'=>'cyan','items'=>array_values(array_filter([
-  $can('monitoring')?['Monitoring','Status & trafik pelanggan','monitoring','fa-chart-line']:null,
-  $can('customers')?['Pelanggan','Data & layanan pelanggan','customers','fa-users']:null]))],
+ ['id'=>'operations','title'=>'Operasional','subtitle'=>'Pelanggan dan jaringan','icon'=>'fa-users','color'=>'cyan','items'=>array_values(array_filter([
+  $can('customers')?['Pelanggan','Data, status & trafik pelanggan','customers','fa-users']:null]))],
  ['id'=>'billing','title'=>'Billing & Layanan','subtitle'=>'Paket, pembayaran, dan laporan','icon'=>'fa-wallet','color'=>'violet','items'=>array_values(array_filter([
   $can('packages')?['Paket Internet','Harga & relasi profile','packages','fa-box-open']:null,
   $can('payments')?['Pembayaran','Tagihan & transaksi','payments','fa-wallet']:null,

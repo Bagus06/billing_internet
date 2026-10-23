@@ -3,7 +3,7 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 class Monitoring extends MY_Controller
 {
-    protected $permission = 'monitoring';
+    protected $permission = 'customers';
     public function __construct()
     {
         parent::__construct();
@@ -15,14 +15,7 @@ class Monitoring extends MY_Controller
 
     public function index($routerId = null)
     {
-        $router = $routerId ? $this->router_model->find($routerId) : null;
-        $data = [
-            'title' => ($router ? $router['name'] . ' - ' : '') . 'Monitoring Mikrotik - ' . app_setting('isp_name', 'ISP Billing'),
-            'body_class' => 'monitoring-page',
-            'router' => $router,
-        ];
-
-        $this->render('index', $data);
+        redirect('customers');
     }
 
     public function router($routerId)

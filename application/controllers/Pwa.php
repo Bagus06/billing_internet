@@ -24,8 +24,7 @@ class Pwa extends CI_Controller
                 ['src' => site_url('pwa/icon/512'), 'sizes' => '512x512', 'type' => 'image/png', 'purpose' => 'maskable'],
             ],
             'shortcuts' => [
-                ['name' => 'Monitoring PPPoE', 'short_name' => 'Monitoring', 'url' => site_url('monitoring?source=pwa-shortcut'), 'icons' => [['src' => base_url($logo), 'sizes' => 'any']]],
-                ['name' => 'Data Pelanggan', 'short_name' => 'Pelanggan', 'url' => site_url('customers?source=pwa-shortcut'), 'icons' => [['src' => base_url($logo), 'sizes' => 'any']]],
+                ['name' => 'Pelanggan', 'short_name' => 'Pelanggan', 'url' => site_url('customers?source=pwa-shortcut'), 'icons' => [['src' => base_url($logo), 'sizes' => 'any']]],
                 ['name' => 'Pembayaran', 'short_name' => 'Pembayaran', 'url' => site_url('payments?source=pwa-shortcut'), 'icons' => [['src' => base_url($logo), 'sizes' => 'any']]],
             ],
             'launch_handler' => ['client_mode' => ['navigate-existing', 'auto']], 'handle_links' => 'preferred',

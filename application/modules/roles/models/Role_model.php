@@ -10,9 +10,8 @@ class Role_model extends MY_Model
         return [
             'home' => 'Home',
             'calculator' => 'Calculator Redaman',
-            'monitoring' => 'Monitoring Mikrotik',
             'routers' => 'Data Mikrotik',
-            'customers' => 'Data Pelanggan',
+            'customers' => 'Pelanggan & Monitoring',
             'packages' => 'Paket Internet',
             'payments' => 'Data Pembayaran',
             'financial_reports' => 'Laporan Keuangan',

@@ -29,7 +29,7 @@ class Customers extends MY_Controller
 
         $customers = $this->customer_model->get_paginated($filters, $perPage, $offset);
         $this->render('index', [
-            'title' => 'Data Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
+            'title' => 'Pelanggan - ' . app_setting('isp_name', 'ISP Billing'),
             'customers' => $this->withArrears($customers),
             'filters' => $filters,
             'page' => $page,
