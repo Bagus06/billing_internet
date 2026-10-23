@@ -58,6 +58,15 @@ class CI_Router {
 	public $config;
 
 	/**
+	 * CI_URI class object
+	 *
+	 * Explicitly declared for PHP 8.2 dynamic-property compatibility.
+	 *
+	 * @var	object
+	 */
+	public $uri;
+
+	/**
 	 * List of routes
 	 *
 	 * @var	array

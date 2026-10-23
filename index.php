@@ -1,10 +1,16 @@
 <?php
-defined('ENVIRONMENT') or define('ENVIRONMENT', isset($_SERVER['CI_ENV']) ? $_SERVER['CI_ENV'] : 'development');
-
 require_once __DIR__ . '/vendor/autoload.php';
 
 $dotenv = Dotenv\Dotenv::createImmutable(__DIR__);
 $dotenv->safeLoad();
+
+// Load the application environment after Dotenv so APP_ENVIRONMENT from .env
+// is respected on hosting that does not provide the CI_ENV server variable.
+$appEnvironment = isset($_SERVER['CI_ENV']) && trim((string) $_SERVER['CI_ENV']) !== ''
+    ? $_SERVER['CI_ENV']
+    : (isset($_ENV['APP_ENVIRONMENT']) ? $_ENV['APP_ENVIRONMENT'] : getenv('APP_ENVIRONMENT'));
+$appEnvironment = strtolower(trim((string) ($appEnvironment ?: 'development')));
+defined('ENVIRONMENT') or define('ENVIRONMENT', $appEnvironment);
 
 switch (ENVIRONMENT) {
     case 'development':

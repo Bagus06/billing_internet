@@ -51,6 +51,15 @@ defined('BASEPATH') OR exit('No direct script access allowed');
 class CI_URI {
 
 	/**
+	 * CI_Config class object
+	 *
+	 * Explicitly declared for PHP 8.2 dynamic-property compatibility.
+	 *
+	 * @var	object
+	 */
+	public $config;
+
+	/**
 	 * List of cached URI segments
 	 *
 	 * @var	array
