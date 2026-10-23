@@ -16,6 +16,9 @@ class Setting_model extends MY_Model
     public function ensure_defaults()
     {
         $defaults = [
+            'telegram_enabled' => ['notifications', '0', 'boolean'],
+            'telegram_bot_token' => ['notifications', '', 'string'],
+            'telegram_chat_id' => ['notifications', '', 'string'],
             'isp_name' => ['branding', 'ISP BATARA NET', 'string'],
             'app_subtitle' => ['branding', 'Mikrotik Network Tools', 'string'],
             'logo_path' => ['branding', 'assets/img/default-isp-logo.svg', 'string'],

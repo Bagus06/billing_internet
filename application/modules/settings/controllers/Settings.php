@@ -49,6 +49,16 @@ class Settings extends MY_Controller
 
     public function update()
     {
+        $telegramToken = trim((string) $this->input->post('telegram_bot_token'));
+        if ($telegramToken === '') $telegramToken = (string) app_setting('telegram_bot_token', '');
+        $telegramChatId = trim((string) $this->input->post('telegram_chat_id', true));
+        if (($telegramToken !== '' && !preg_match('/^[0-9]+:[A-Za-z0-9_-]+$/', $telegramToken))
+            || ($telegramChatId !== '' && !preg_match('/^(?:-?[0-9]+|@[A-Za-z0-9_]{5,})$/', $telegramChatId))
+            || ($this->input->post('telegram_enabled') && ($telegramToken === '' || $telegramChatId === ''))) {
+            $this->session->set_flashdata('error', 'Konfigurasi Telegram tidak valid. Isi Bot Token dari BotFather dan Chat ID tujuan sebelum mengaktifkan notifikasi.');
+            redirect('settings');
+            return;
+        }
         $currentLogo = app_setting('logo_path', 'assets/img/logo.jpeg');
         try { $logo = $this->uploadLogo($currentLogo); }
         catch (InvalidArgumentException $e) { $this->session->set_flashdata('error', $e->getMessage()); redirect('settings'); return; }
@@ -71,6 +81,9 @@ class Settings extends MY_Controller
         $tenantName = app_setting('isp_name', 'ISP BATARA NET');
 
         $settings = [
+            'telegram_enabled' => $this->entry('notifications', $this->input->post('telegram_enabled') ? '1' : '0', 'boolean'),
+            'telegram_bot_token' => $this->entry('notifications', $telegramToken),
+            'telegram_chat_id' => $this->entry('notifications', $telegramChatId),
             'isp_name' => $this->entry('branding', trim($this->input->post('isp_name', true)) ?: $tenantName),
             'app_subtitle' => $this->entry('branding', trim($this->input->post('app_subtitle', true)) ?: 'Mikrotik Network Tools'),
             'logo_path' => $this->entry('branding', $logo),

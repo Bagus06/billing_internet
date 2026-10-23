@@ -62,6 +62,19 @@ class Cron_scheduler
                 'task_count' => count($results),
                 'tasks' => $results,
             ];
+            try {
+                $this->CI->load->library('Telegram_notifier');
+                $notification = $this->CI->telegram_notifier->cronSummary($summary);
+            } catch (Throwable $e) {
+                $notification = ['success' => false, 'message' => 'Pengiriman notifikasi Telegram tidak dapat dijalankan.'];
+            }
+            $summary['telegram'] = $notification;
+            if (empty($notification['skipped'])) {
+                $this->logTask($runId, $schedule, [
+                    'key' => 'telegram_notification', 'success' => !empty($notification['success']),
+                    'duration_ms' => 0, 'message' => $notification['message'], 'result' => $notification,
+                ]);
+            }
             $this->finishRun($runId, $success ? 'SUCCESS' : 'FAILED', $duration, $summary);
             return $summary;
         } finally {
