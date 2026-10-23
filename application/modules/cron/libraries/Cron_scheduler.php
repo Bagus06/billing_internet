@@ -19,6 +19,14 @@ class Cron_scheduler
             throw new InvalidArgumentException('Jadwal cron tidak dikenal: ' . $schedule);
         }
 
+        $tasks = array_values(array_filter($this->tasksFor($schedule), function ($task) use ($onlyTasks) {
+            return !$onlyTasks || in_array($task['key'], $onlyTasks, true);
+        }));
+        if (!$tasks) {
+            return ['success' => true, 'skipped' => true, 'schedule' => $schedule,
+                'message' => 'Tidak ada task pada jadwal ini; log tidak dibuat.', 'tasks' => []];
+        }
+
         $lockName = 'billing_internet_cron_' . $schedule;
         if (!$this->acquireLock($lockName)) {
             return [
@@ -37,8 +45,7 @@ class Cron_scheduler
 
         try {
             $runId = $this->startRun($schedule);
-            foreach ($this->tasksFor($schedule) as $task) {
-                if ($onlyTasks && !in_array($task['key'], $onlyTasks, true)) continue;
+            foreach ($tasks as $task) {
                 $result = $this->runTask($runId, $schedule, $task);
                 $results[] = $result;
                 if (empty($result['success'])) $success = false;
@@ -80,6 +87,7 @@ class Cron_scheduler
                 // Contoh: ['key' => 'router_health', 'handler' => 'runRouterHealth'],
             ],
             'daily' => [
+                ['key' => 'cron_log_cleanup', 'handler' => 'runLogCleanup'],
                 ['key' => 'customer_isolation', 'handler' => 'runCustomerIsolation'],
             ],
         ];
@@ -90,6 +98,36 @@ class Cron_scheduler
     {
         $this->CI->load->library('Customer_isolation');
         return $this->CI->customer_isolation->run('cron');
+    }
+
+    private function runLogCleanup()
+    {
+        if (!$this->loggingAvailable()) {
+            return ['success' => false, 'message' => 'Tabel log cron belum tersedia.'];
+        }
+        $deleted = 0;
+        foreach (['daily' => 30, 'hourly' => 7, 'five_minutes' => 7] as $schedule => $days) {
+            $cutoff = date('Y-m-d H:i:s', strtotime('-' . $days . ' days'));
+            // Batasi pekerjaan per jadwal; sisa backlog dibersihkan pada hari berikutnya.
+            for ($batch = 0; $batch < 10; $batch++) {
+                $rows = $this->CI->db->select('id')->where('schedule_name', $schedule)
+                    ->where('started_at <', $cutoff)->where('status !=', 'RUNNING')
+                    ->order_by('id', 'ASC')->limit(500)->get('cron_runs')->result_array();
+                if (!$rows) break;
+                $ids = array_map('intval', array_column($rows, 'id'));
+                $this->CI->db->trans_start();
+                $this->CI->db->where_in('cron_run_id', $ids)->delete('cron_task_logs');
+                $this->CI->db->where_in('id', $ids)->delete('cron_runs');
+                $this->CI->db->trans_complete();
+                if (!$this->CI->db->trans_status()) {
+                    return ['success' => false, 'message' => 'Pembersihan log cron gagal.', 'deleted' => $deleted];
+                }
+                $deleted += count($ids);
+                if (count($ids) < 500) break;
+            }
+        }
+        return ['success' => true, 'deleted' => $deleted,
+            'message' => $deleted . ' log cron lama dibersihkan. Retensi daily 30 hari; hourly dan five minutes 7 hari.'];
     }
 
     private function runTask($runId, $schedule, array $task)
