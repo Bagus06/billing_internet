@@ -296,9 +296,12 @@ class Customer_model extends MY_Model
         $lastDue = "CASE WHEN LOWER(COALESCE(customers.group_name, '')) REGEXP '(^|[^0-9])2([^0-9]|$)' THEN '{$groupTwoLastDue}' ELSE '{$groupOneLastDue}' END";
         $startPeriod = "COALESCE(DATE_FORMAT(customers.psb_date, '%Y-%m-01'), DATE_FORMAT(customers.created_at, '%Y-%m-01'))";
         $paymentPeriod = "STR_TO_DATE(CONCAT(p.bill_year, '-', LPAD(p.bill_month, 2, '0'), '-01'), '%Y-%m-%d')";
-        $paidPeriods = "(SELECT COUNT(DISTINCT CONCAT(p.bill_year, '-', LPAD(p.bill_month, 2, '0'))) FROM customer_payments p WHERE (p.customer_id = customers.id OR p.customer_code = customers.customer_code) AND {$paymentPeriod} BETWEEN {$startPeriod} AND {$lastDue})";
-        $expectedPeriods = "GREATEST(0, TIMESTAMPDIFF(MONTH, {$startPeriod}, {$lastDue}) + 1)";
-        return "COALESCE((UPPER(COALESCE(customers.customer_status, '')) <> 'LEAD' AND {$startPeriod} IS NOT NULL AND {$expectedPeriods} > {$paidPeriods}), 0) = 1";
+        $currentPeriod = $today->modify('first day of this month')->format('Y-m-d');
+        $coveredPayment = "EXISTS (SELECT 1 FROM customer_payments p WHERE (p.customer_id = customers.id OR p.customer_code = customers.customer_code) AND {$paymentPeriod} BETWEEN {$lastDue} AND '{$currentPeriod}')";
+
+        // A payment in the due month or a later current month reopens service.
+        // Older unpaid periods are not carried as debt because service was isolated.
+        return "COALESCE((UPPER(COALESCE(customers.customer_status, '')) <> 'LEAD' AND {$startPeriod} IS NOT NULL AND {$startPeriod} <= {$lastDue} AND NOT ({$coveredPayment})), 0) = 1";
     }
 
     private function lastDuePeriod(DateTimeImmutable $today, $dueDay)

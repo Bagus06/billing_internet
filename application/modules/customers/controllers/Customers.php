@@ -224,19 +224,19 @@ class Customers extends MY_Controller
             $deadline = $this->billingDeadline($customer, $today);
             $lastDue = $today >= $deadline ? $today->modify('first day of this month') : $today->modify('first day of previous month');
             if ($start > $lastDue) continue;
-            $missing = []; $cursor = $start; $guard = 0;
-            while ($cursor <= $lastDue && $guard++ < 240) {
-                $period = $cursor->format('Y-m');
-                $isPaid = !empty($paid['id:' . (int) $customer['id']][$period]) || !empty($paid['code:' . $customer['customer_code']][$period]);
-                if (!$isPaid) $missing[] = $period;
-                $cursor = $cursor->modify('+1 month');
+            $lastDuePeriod = $lastDue->format('Y-m');
+            $currentPeriod = $today->format('Y-m');
+            $periodsById = isset($paid['id:' . (int) $customer['id']]) ? $paid['id:' . (int) $customer['id']] : [];
+            $periodsByCode = isset($paid['code:' . $customer['customer_code']]) ? $paid['code:' . $customer['customer_code']] : [];
+            $covered = false;
+            foreach (array_unique(array_merge(array_keys($periodsById), array_keys($periodsByCode))) as $period) {
+                if ($period >= $lastDuePeriod && $period <= $currentPeriod) { $covered = true; break; }
             }
-            $customer['arrears_count'] = count($missing);
-            $customer['arrears_amount'] = count($missing) * (float) $customer['price'];
-            $customer['arrears_periods'] = implode(', ', array_map(function ($period) {
-                $date = DateTimeImmutable::createFromFormat('!Y-m', $period);
-                return $date ? $date->format('m/Y') : $period;
-            }, $missing));
+            if ($covered) continue;
+
+            $customer['arrears_count'] = 1;
+            $customer['arrears_amount'] = (float) $customer['price'];
+            $customer['arrears_periods'] = $lastDue->format('m/Y');
         }
         unset($customer);
         return $customers;
