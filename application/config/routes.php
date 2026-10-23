@@ -12,6 +12,7 @@ $route['cron/hourly'] = 'cron/cron/hourly';
 $route['cron/daily'] = 'cron/cron/daily';
 $route['cron/daily-preview'] = 'cron/cron/daily_preview';
 $route['cron/isolation'] = 'cron/cron/isolation';
+$route['cron-logs'] = 'cron_logs/index';
 $route['isolation-notice'] = 'isolation_notice/index';
 $route['healthz'] = 'health/index';
 $route['pwa/manifest'] = 'pwa/manifest';

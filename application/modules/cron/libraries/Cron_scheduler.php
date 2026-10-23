@@ -102,7 +102,20 @@ class Cron_scheduler
             $payload = call_user_func([$this, $task['handler']]);
             if (!is_array($payload)) $payload = ['success' => true, 'result' => $payload];
             $success = !empty($payload['success']);
-            $message = isset($payload['message']) ? (string) $payload['message'] : ($success ? 'Task berhasil.' : 'Task gagal.');
+            if (isset($payload['message'])) {
+                $message = (string) $payload['message'];
+            } elseif (array_key_exists('isolated', $payload)) {
+                $message = sprintf(
+                    'Proses isolir selesai: %d berhasil, %d dilewati, %d gagal.',
+                    (int) ($payload['isolated'] ?? 0),
+                    (int) ($payload['skipped'] ?? 0),
+                    (int) ($payload['failed'] ?? 0)
+                );
+            } elseif (!empty($payload['messages']) && is_array($payload['messages'])) {
+                $message = (string) reset($payload['messages']);
+            } else {
+                $message = $success ? 'Task berhasil.' : 'Task gagal.';
+            }
         } catch (Throwable $e) {
             $success = false;
             $message = $e->getMessage();
