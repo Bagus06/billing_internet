@@ -361,6 +361,19 @@
         if (customerAppShell) customerAppShell.inert = false;
     }
 
+    function syncOpenNetworkDetail(card) {
+        if (!detailModal || !card || currentDetailCard !== card || !detailModal.classList.contains('is-open')) return;
+        ['networkStatus', 'networkRouter', 'networkUsername', 'networkProfile', 'networkAddress', 'networkCallerId', 'networkUptime', 'networkLastOff', 'networkRx', 'networkTx', 'networkSignal', 'networkOnt'].forEach(function (key) {
+            const field = detailModal.querySelector('[data-detail="' + key + '"]');
+            if (field) field.textContent = card.dataset[key] || '-';
+        });
+        if (detailNetworkToggle) {
+            const source = card.querySelector('[data-customer-network-toggle]');
+            detailNetworkToggle.hidden = !source || source.hidden;
+            if (source && !source.hidden) detailNetworkToggle.innerHTML = source.innerHTML;
+        }
+    }
+
     function openCustomerDetail(card) {
         if (!detailModal || !card) return;
         if (detailModal.classList.contains('is-open')) closeCustomerDetail();
@@ -484,9 +497,11 @@
         const badge = strip.querySelector('[data-network-field="badge"]');
         if (badge) badge.innerHTML = '<i class="fa-solid ' + (online ? 'fa-circle-check' : 'fa-circle-xmark') + '"></i>' + (online ? 'ONLINE' : 'OFFLINE');
         const uptime = formatNetworkUptime(row.uptime);
+        const rxDisplay = online && card.dataset.networkRx && card.dataset.networkRx !== '-' ? card.dataset.networkRx : (online ? '0 bps' : '-');
+        const txDisplay = online && card.dataset.networkTx && card.dataset.networkTx !== '-' ? card.dataset.networkTx : (online ? '0 bps' : '-');
         setNetworkField(card, 'uptime', uptime);
-        setNetworkField(card, 'rx', online ? '0 bps' : '-');
-        setNetworkField(card, 'tx', online ? '0 bps' : '-');
+        setNetworkField(card, 'rx', rxDisplay);
+        setNetworkField(card, 'tx', txDisplay);
         setNetworkField(card, 'signal', signal);
         card.dataset.networkStatus = online ? 'ONLINE' : 'OFFLINE';
         card.dataset.networkRouter = row.router || '-';
@@ -496,8 +511,8 @@
         card.dataset.networkCallerId = row.caller_id || '-';
         card.dataset.networkUptime = uptime;
         card.dataset.networkLastOff = row.last_off || '-';
-        card.dataset.networkRx = online ? '0 bps' : '-';
-        card.dataset.networkTx = online ? '0 bps' : '-';
+        card.dataset.networkRx = rxDisplay;
+        card.dataset.networkTx = txDisplay;
         card.dataset.networkSignal = signal;
         card.dataset.networkOnt = [row.ont_name, row.ont_serial_number].filter(function (value) { return value && value !== '-'; }).join(' / ') || '-';
         card.dataset.networkRouterId = row.router_id || '';
@@ -512,6 +527,7 @@
                 ? '<i class="fa-solid fa-plug-circle-check"></i><span>Hubungkan PPPoE</span>'
                 : '<i class="fa-solid fa-plug-circle-xmark"></i><span>Putuskan PPPoE</span>';
         }
+        syncOpenNetworkDetail(card);
     }
 
     function markMissingNetworkCards(found) {
@@ -581,6 +597,7 @@
                         const tx = elapsed ? Math.max(0, (Number(row.bytes_out || 0) - previous.tx) / elapsed) : 0;
                         setNetworkField(card, 'rx', formatNetworkRate(rx)); setNetworkField(card, 'tx', formatNetworkRate(tx));
                         card.dataset.networkRx = formatNetworkRate(rx); card.dataset.networkTx = formatNetworkRate(tx);
+                        syncOpenNetworkDetail(card);
                     });
                     trafficSamples.set(key, { rx: Number(row.bytes_in || 0), tx: Number(row.bytes_out || 0), at: now });
                 });
