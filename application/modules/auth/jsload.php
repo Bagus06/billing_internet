@@ -1,2 +1,2 @@
 <?php defined('BASEPATH') or exit('No direct script access allowed'); ?>
-<?php // Tambahkan <script> asset JavaScript khusus modul auth di file ini. ?>
+<script src="<?= base_url('application/modules/auth/assets/js/login.js?v=' . filemtime(APPPATH . 'modules/auth/assets/js/login.js')) ?>"></script>
