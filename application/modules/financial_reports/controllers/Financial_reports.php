@@ -79,6 +79,7 @@ class Financial_reports extends MY_Controller
             'Pihak Pertama ·' => 'First Party ·', 'Pihak Kedua ·' => 'Second Party ·',
             'Cadangan Perusahaan (' => 'Company Reserve (',
             '<strong>Dasar perhitungan:</strong>' => '<strong>Calculation basis:</strong>',
+            'Pendapatan berdasarkan tanggal pembayaran, termasuk tunggakan yang diterima pada bulan laporan.' => 'Income follows payment dates, including arrears received in the report month.',
             'Pembayaran BULANAN dihitung penuh. Setiap pembayaran PSB dikurangi Rp50.000 untuk teknisi dan Rp50.000 untuk promotor.' => 'MONTHLY payments are counted in full. Each PSB payment is deducted by Rp50,000 for the technician and Rp50,000 for the promoter.',
             '>Rincian Transaksi<' => '>Transaction Details<', '>Tanggal<' => '>Date<', '>ID Pelanggan<' => '>Customer ID<',
             '>Nama Pelanggan<' => '>Customer Name<', '>Paket<' => '>Plan<', '>Jenis<' => '>Type<', '>Pembayaran<' => '>Payment<',

@@ -254,9 +254,15 @@
 
     if (document.readyState === 'complete') hideLoader(0);
     else window.addEventListener('load', function () { hideLoader(220); });
+    // Clear navigation overlays when returning via the browser back/forward cache.
+    window.addEventListener('pageshow', function () { hideLoader(0); });
 
     document.addEventListener('submit', function (event) {
         const form = event.target;
+
+        const formTarget = event.submitter && event.submitter.getAttribute('formtarget')
+            || form && form.getAttribute('target') || '';
+        if (formTarget && formTarget.toLowerCase() !== '_self') return;
 
         if (form && !form.hasAttribute('data-no-loader')) {
             if (typeof form.checkValidity === 'function' && !form.checkValidity()) {
@@ -268,6 +274,8 @@
     }, true);
 
     document.addEventListener('click', function (event) {
+        // Modified clicks navigate another tab/window; this page stays interactive.
+        if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey || event.button !== 0 || event.defaultPrevented) return;
         const target = event.target.closest('a, button');
 
         if (!target || target.hasAttribute('data-no-loader')) {
@@ -281,7 +289,9 @@
         if (target.tagName === 'A') {
             const href = target.getAttribute('href') || '';
 
-            if (!href || href === '#' || href.indexOf('javascript:') === 0 || target.target === '_blank') {
+            const linkTarget = target.getAttribute('target') || document.querySelector('base[target]')?.getAttribute('target') || '';
+            if (!href || href.startsWith('#') || /^(javascript:|mailto:|tel:)/i.test(href)
+                || target.hasAttribute('download') || (linkTarget && linkTarget.toLowerCase() !== '_self')) {
                 return;
             }
 

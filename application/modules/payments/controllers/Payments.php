@@ -12,6 +12,7 @@ class Payments extends MY_Controller
         $this->load->model('payments/payment_model');
         $this->load->model('customers/customer_model');
         $this->load->library('Customer_isolation');
+        $this->load->library('Customer_billing_periods');
     }
 
     public function index()
@@ -35,6 +36,13 @@ class Payments extends MY_Controller
         ]);
     }
 
+    public function periods($customerId)
+    {
+        $customer = $this->customer_model->find((int) $customerId);
+        if (!$customer) { show_404(); return; }
+        $this->output->set_content_type('application/json')->set_output(json_encode($this->customer_billing_periods->options($customer), JSON_UNESCAPED_UNICODE));
+    }
+
     public function store()
     {
         $customerId = (int) $this->input->post('customer_id');
@@ -46,9 +54,24 @@ class Payments extends MY_Controller
         }
 
         $paymentDate = $this->input->post('payment_date') ?: date('Y-m-d');
-        $billMonth = (int) date('n', strtotime($paymentDate));
-        $billYear = (int) date('Y', strtotime($paymentDate));
+        $parsedDate = DateTime::createFromFormat('!Y-m-d', $paymentDate);
+        $billMonthInput = $this->input->post('bill_month');
+        $billYearInput = $this->input->post('bill_year');
+        $billMonth = $billMonthInput === null ? (int) date('n', strtotime($paymentDate)) : (int) $billMonthInput;
+        $billYear = $billYearInput === null ? (int) date('Y', strtotime($paymentDate)) : (int) $billYearInput;
+        if (!$parsedDate || $parsedDate->format('Y-m-d') !== $paymentDate
+            || $billMonth < 1 || $billMonth > 12 || $billYear < 2000 || $billYear > 2100) {
+            $this->session->set_flashdata('error', 'Tanggal pembayaran atau periode tagihan tidak valid.');
+            redirect('customers');
+            return;
+        }
         $method = trim($this->input->post('payment_method', true));
+        $periods = $this->customer_billing_periods->options($customer);
+        $selectedPeriod = sprintf('%04d-%02d', $billYear, $billMonth);
+        if (!in_array($selectedPeriod, array_column($periods['options'], 'value'), true)) {
+            $this->session->set_flashdata('error', 'Periode tidak dapat dibayar: sudah lunas, dibebaskan karena isolir, atau belum tersedia.');
+            redirect('customers'); return;
+        }
 
         if (!in_array($method, $this->methods, true)) {
             $method = 'CASH';

@@ -13,3 +13,4 @@
 <?php if (!empty($module_cssload) && is_file($module_cssload)): ?>
     <?php require $module_cssload; ?>
 <?php endif; ?>
+<link rel="stylesheet" href="<?= base_url('assets/css/liquid-glass.css?v=' . filemtime(FCPATH . 'assets/css/liquid-glass.css')) ?>">

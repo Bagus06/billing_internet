@@ -69,6 +69,7 @@ $route['packages/sync-profiles'] = 'packages/sync_profiles';
 $route['packages/sync-secrets'] = 'packages/sync_secrets';
 $route['payments'] = 'payments/index';
 $route['payments/store'] = 'payments/store';
+$route['payments/periods/(:num)'] = 'payments/periods/$1';
 $route['payments/delete/(:num)'] = 'payments/delete/$1';
 $route['financial-reports'] = 'financial_reports/index';
 $route['financial-reports/print'] = 'financial_reports/print_report';

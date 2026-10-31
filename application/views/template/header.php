@@ -14,6 +14,7 @@ $activeMenu = (string) $this->uri->segment(1);
         <?php if ($hasAccess('home')): ?><a href="<?= site_url('/') ?>" class="app-home-link"><i class="fa-solid fa-house"></i><span>Home</span></a><?php endif; ?>
         <details class="app-menu-dropdown"><summary><i class="fa-solid fa-table-cells-large"></i><span>Menu</span><i class="fa-solid fa-chevron-down menu-chevron"></i></summary>
             <div class="app-menu-panel">
+                <div class="app-menu-scroll">
                 <?php if ($hasAccess('customers')): ?><div class="app-menu-section"><span>Operasional</span></div><?php endif; ?>
                 <?php if ($hasAccess('customers')): ?><a class="<?= in_array($activeMenu, ['customers', 'monitoring'], true) ? 'is-active' : '' ?>" href="<?= site_url('customers') ?>"><i class="fa-solid fa-users"></i><span><strong>Pelanggan</strong><small>Data, status & trafik pelanggan</small></span></a><?php endif; ?>
                 <?php if ($hasAccess('packages') || $hasAccess('payments') || $hasAccess('financial_reports')): ?><div class="app-menu-section"><span>Billing & Layanan</span></div><?php endif; ?>
@@ -32,6 +33,7 @@ $activeMenu = (string) $this->uri->segment(1);
                 <div class="app-menu-divider"></div>
                 <?php if ($hasAccess('profile')): ?><a class="<?= $activeMenu === 'profile' ? 'is-active' : '' ?>" href="<?= site_url('profile') ?>"><i class="fa-solid fa-circle-user"></i><span><strong><?= html_escape($authUser['name'] ?? 'Profile') ?></strong><small>Profile akun saya</small></span></a><?php endif; ?>
                 <?php if ($authUser): ?><a href="<?= site_url('logout') ?>" class="is-logout"><i class="fa-solid fa-right-from-bracket"></i><span><strong>Keluar</strong><small>Akhiri sesi aplikasi</small></span></a><?php endif; ?>
+                </div>
             </div>
         </details>
     </nav>

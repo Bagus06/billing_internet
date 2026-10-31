@@ -709,6 +709,15 @@
     const paymentCustomerPrice = document.getElementById('paymentCustomerPrice');
     const paymentForm = document.querySelector('[data-customer-payment-form]');
     const paymentSubmit = document.querySelector('[data-payment-submit]');
+    const paymentPeriod = document.querySelector('[data-payment-period]');
+    let paymentPeriodRequest = 0;
+    function selectPaymentPeriod() {
+        const parts = paymentPeriod.value.split('-');
+        paymentForm.querySelector('[data-payment-bill-month]').value = parts[1] || '';
+        paymentForm.querySelector('[data-payment-bill-year]').value = parts[0] || '';
+        paymentSubmit.disabled = !paymentPeriod.value;
+    }
+    if (paymentPeriod) paymentPeriod.addEventListener('change', selectPaymentPeriod);
 
     if (!paymentModal || !paymentCustomerId || !paymentCustomerName || !paymentCustomerCode || !paymentCustomerPrice) {
         return;
@@ -717,13 +726,36 @@
     document.querySelectorAll('.customer-pay-button').forEach(function (button) {
         button.addEventListener('click', function () {
             if (window.AppLoader) window.AppLoader.hide(0);
+            if (paymentForm) paymentForm.reset();
             paymentCustomerId.value = button.dataset.customerId || '';
             paymentCustomerName.textContent = button.dataset.customerName || '-';
             paymentCustomerCode.textContent = button.dataset.customerCode || '-';
             paymentCustomerPrice.textContent = button.dataset.customerPrice || '-';
             paymentModal.classList.add('is-open');
             paymentModal.setAttribute('aria-hidden', 'false');
-            if (paymentSubmit) { paymentSubmit.disabled = false; paymentSubmit.style.pointerEvents = 'auto'; }
+            if (paymentSubmit) { paymentSubmit.disabled = true; paymentSubmit.style.pointerEvents = 'auto'; }
+            if (paymentPeriod) {
+                const request = ++paymentPeriodRequest;
+                paymentPeriod.disabled = true; paymentPeriod.replaceChildren(new Option('Memuat tagihan...', ''));
+                paymentForm.querySelector('[data-payment-waived]').textContent = '';
+                paymentForm.querySelector('[data-payment-period-status]').textContent = 'Memuat tagihan pelanggan...';
+                fetch(paymentPeriod.dataset.url + '/' + button.dataset.customerId, {loader: false, cache: 'no-store', headers: {Accept: 'application/json'}})
+                    .then(function (response) { if (!response.ok) throw new Error(); return response.json(); })
+                    .then(function (data) {
+                        if (request !== paymentPeriodRequest) return;
+                        paymentPeriod.replaceChildren();
+                        (data.options || []).forEach(function (period) { paymentPeriod.add(new Option(period.label + ' — Rp ' + formatRupiah(period.amount), period.value)); });
+                        if (!paymentPeriod.options.length) paymentPeriod.add(new Option('Tidak ada tagihan yang perlu dibayar', ''));
+                        paymentPeriod.disabled = !data.options || !data.options.length;
+                        paymentForm.querySelector('[data-payment-period-status]').textContent = 'Default memilih tagihan tertua. Pendapatan mengikuti tanggal pembayaran.';
+                        paymentForm.querySelector('[data-payment-waived]').textContent = (data.waived || []).map(function (period) { return period.label; }).join('; ');
+                        selectPaymentPeriod();
+                    }).catch(function () {
+                        if (request !== paymentPeriodRequest) return;
+                        paymentPeriod.replaceChildren(new Option('Tagihan gagal dimuat', ''));
+                        paymentForm.querySelector('[data-payment-period-status]').textContent = 'Tutup dan buka kembali pembayaran untuk mencoba lagi.';
+                    });
+            }
         });
     });
 

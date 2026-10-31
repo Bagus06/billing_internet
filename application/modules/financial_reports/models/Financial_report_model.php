@@ -7,8 +7,8 @@ class Financial_report_model extends MY_Model
 
     public function available_years()
     {
-        $rows = $this->db->select('bill_year')->distinct()->where('bill_year >', 0)->order_by('bill_year', 'DESC')->get($this->table)->result_array();
-        $years = array_map('intval', array_column($rows, 'bill_year'));
+        $rows = $this->db->select('YEAR(payment_date) AS year', false)->distinct()->where('payment_date >=', '1000-01-01')->get($this->table)->result_array();
+        $years = array_map('intval', array_column($rows, 'year'));
         foreach ($this->db->select('YEAR(created_at) AS year', false)->distinct()->get('customers')->result_array() as $row) if (!empty($row['year'])) $years[] = (int) $row['year'];
         if ($this->db->table_exists('customer_status_history')) foreach ($this->db->select('YEAR(changed_at) AS year', false)->distinct()->get('customer_status_history')->result_array() as $row) if (!empty($row['year'])) $years[] = (int) $row['year'];
         $years = array_values(array_unique($years)); rsort($years); return $years;
@@ -16,7 +16,10 @@ class Financial_report_model extends MY_Model
 
     public function monthly_summary($year)
     {
-        return $this->db->select("bill_month,
+        $start = sprintf('%04d-01-01', (int) $year);
+        $end = sprintf('%04d-01-01', (int) $year + 1);
+        // Alias dipertahankan untuk konsumen grafik/laporan; bulan berasal dari penerimaan uang.
+        return $this->db->select("MONTH(payment_date) AS bill_month,
             COUNT(*) AS transaction_count,
             SUM(CASE WHEN UPPER(payment_type) = 'PSB' THEN 1 ELSE 0 END) AS psb_count,
             SUM(CASE WHEN UPPER(payment_type) <> 'PSB' THEN 1 ELSE 0 END) AS monthly_count,
@@ -24,16 +27,30 @@ class Financial_report_model extends MY_Model
             SUM(CASE WHEN UPPER(payment_type) = 'PSB' THEN 50000 ELSE 0 END) AS technician_deduction,
             SUM(CASE WHEN UPPER(payment_type) = 'PSB' THEN 50000 ELSE 0 END) AS promoter_deduction,
             SUM(CASE WHEN UPPER(payment_type) = 'PSB' THEN price - 100000 ELSE price END) AS net_income", false)
-            ->where('bill_year', (int) $year)->group_by('bill_month')->order_by('bill_month', 'ASC')->get($this->table)->result_array();
+            ->where('payment_date >=', $start)->where('payment_date <', $end)
+            ->group_by('MONTH(payment_date)', false)->order_by('MONTH(payment_date)', 'ASC', false)->get($this->table)->result_array();
     }
 
     public function month_detail($year, $month)
     {
-        return $this->db->select("*, CASE WHEN UPPER(payment_type) = 'PSB' THEN 50000 ELSE 0 END AS technician_deduction,
+        $start = new DateTimeImmutable(sprintf('%04d-%02d-01', (int) $year, (int) $month));
+        $rows = $this->db->select("*, CASE WHEN UPPER(payment_type) = 'PSB' THEN 50000 ELSE 0 END AS technician_deduction,
             CASE WHEN UPPER(payment_type) = 'PSB' THEN 50000 ELSE 0 END AS promoter_deduction,
             CASE WHEN UPPER(payment_type) = 'PSB' THEN price - 100000 ELSE price END AS net_income", false)
-            ->where('bill_year', (int) $year)->where('bill_month', (int) $month)
+            ->where('payment_date >=', $start->format('Y-m-d'))->where('payment_date <', $start->modify('+1 month')->format('Y-m-d'))
             ->order_by('payment_date', 'DESC')->order_by('id', 'DESC')->get($this->table)->result_array();
+        $months = app_language() === 'en'
+            ? [1=>'January','February','March','April','May','June','July','August','September','October','November','December']
+            : [1=>'Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+        foreach ($rows as &$row) {
+            $billMonth = (int) $row['bill_month'];
+            $billYear = (int) $row['bill_year'];
+            $period = isset($months[$billMonth]) && $billYear > 0 ? $months[$billMonth] . ' ' . $billYear : '-';
+            $isArrears = $billYear > 0 && isset($months[$billMonth]) && sprintf('%04d-%02d-01', $billYear, $billMonth) < $start->format('Y-m-d');
+            $row['receipt_description'] = ($isArrears ? (app_language() === 'en' ? 'Arrears payment: ' : 'Pembayaran tunggakan: ') : (app_language() === 'en' ? 'Billing period: ' : 'Periode tagihan: ')) . $period;
+        }
+        unset($row);
+        return $rows;
     }
 
     public function customer_movement($year)
