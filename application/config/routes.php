@@ -59,6 +59,7 @@ $route['customers/restore-all-isolation'] = 'customers/restore_all_isolation';
 $route['customers/remote-ont'] = 'customers/remote_ont';
 $route['customers/ktp/(:num)'] = 'customers/ktp/$1';
 $route['customers/import-spreadsheet'] = 'customers/import_spreadsheet';
+$route['customers/export-excel'] = 'customers/export_excel';
 $route['packages'] = 'packages/index';
 $route['packages/create'] = 'packages/create';
 $route['packages/store'] = 'packages/store';

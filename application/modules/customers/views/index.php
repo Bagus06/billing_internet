@@ -6,6 +6,8 @@
             <button type="button" class="back-button customer-bulk-isolation" data-customer-bulk-isolation data-url="<?= site_url('customers/isolate-due') ?>"><i class="fa-solid fa-user-lock"></i><span>Isolir Jatuh Tempo</span></button>
             <button type="button" class="back-button customer-bulk-restore" data-customer-bulk-restore data-url="<?= site_url('customers/restore-all-isolation') ?>"><i class="fa-solid fa-unlock-keyhole"></i><span>Pulihkan Isolir</span></button>
             <form method="post" action="<?= site_url('customers/import-spreadsheet') ?>" class="d-inline"><button type="submit" class="back-button" data-confirm="Import pelanggan dan pembayaran dari Google Spreadsheet?"><i class="fa-solid fa-file-import"></i><span>Import Spreadsheet</span></button></form>
+            <?php $exportQuery = array_filter($filters, function ($value) { return trim((string) $value) !== ''; }); ?>
+            <a href="<?= site_url('customers/export-excel' . ($exportQuery ? '?' . http_build_query($exportQuery) : '')) ?>" class="back-button"><i class="fa-solid fa-file-excel"></i><span>Export Pelanggan</span></a>
         </div>
     </div>
 

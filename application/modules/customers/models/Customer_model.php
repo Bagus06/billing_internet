@@ -33,6 +33,17 @@ class Customer_model extends MY_Model
             ->result_array();
     }
 
+    public function get_filtered(array $filters)
+    {
+        $this->baseCustomerQuery($filters, true);
+
+        return $this->db
+            ->order_by('name', 'ASC')
+            ->order_by('customer_code', 'ASC')
+            ->get()
+            ->result_array();
+    }
+
     public function count_filtered(array $filters)
     {
         $this->baseCustomerQuery($filters, false);

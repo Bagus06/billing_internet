@@ -493,6 +493,38 @@ class Customers extends MY_Controller
         redirect('customers');
     }
 
+    public function export_excel()
+    {
+        if (strtoupper($this->input->method()) !== 'GET') { show_404(); return; }
+        if (!class_exists('ZipArchive')) {
+            $this->session->set_flashdata('error', 'Export Excel membutuhkan ekstensi PHP ZipArchive pada server.');
+            redirect('customers');
+            return;
+        }
+
+        $customers = $this->withArrears($this->customer_model->get_filtered($this->filters()));
+        $this->load->library('Customer_excel_export');
+        $temporaryFile = tempnam(sys_get_temp_dir(), 'customer-export-');
+
+        try {
+            $this->customer_excel_export->create($customers, $temporaryFile);
+            $filename = 'data-pelanggan-' . date('Y-m-d-His') . '.xlsx';
+            $this->output
+                ->set_header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                ->set_header('Content-Disposition: attachment; filename="' . $filename . '"')
+                ->set_header('Content-Length: ' . filesize($temporaryFile))
+                ->set_header('Cache-Control: private, no-store, max-age=0')
+                ->set_header('X-Content-Type-Options: nosniff')
+                ->set_output(file_get_contents($temporaryFile));
+        } catch (Throwable $e) {
+            log_message('error', 'Export pelanggan gagal: ' . $e->getMessage());
+            $this->session->set_flashdata('error', 'Export pelanggan gagal dibuat. Silakan coba kembali.');
+            redirect('customers');
+        } finally {
+            if (is_file($temporaryFile)) @unlink($temporaryFile);
+        }
+    }
+
     private function setSyncFlash($message, array $sync)
     {
         if ($sync['updated']) $message .= ' PPP Secret mengikuti profile paket.';
